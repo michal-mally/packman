@@ -1,11 +1,11 @@
 import defaultListRaw from '../default-list.txt?raw'
-import type { Node } from '../types'
+import type { Item } from '../types'
 
-// Parse text with arbitrary nesting (2 spaces per level). Each non-empty line becomes a node.
-export function nodesFromText(text: string): Node[] {
+// Parse text with arbitrary nesting (2 spaces per level). Each non-empty line becomes an item.
+export function itemsFromText(text: string): Item[] {
   const lines = text.replace(/\r/g, '').split('\n')
-  const nodes: Node[] = []
-  const stack: string[] = [] // stack of node ids by depth
+  const items: Item[] = []
+  const stack: string[] = [] // stack of item ids by depth
   let seq = 0
   for (const raw of lines) {
     const line = raw.replace(/\s+$/g, '')
@@ -21,10 +21,10 @@ export function nodesFromText(text: string): Node[] {
     while (stack.length > depth) stack.pop() // shrink stack to current depth
     const parentId = depth === 0 ? null : stack[stack.length - 1] ?? null
     const id = `n:${++seq}`
-    nodes.push({ id, name, status: 'default', parentId })
-    stack.push(id) // push this node as current parent for deeper levels
+    items.push({ id, name, parentId })
+    stack.push(id) // push this item as current parent for deeper levels
   }
-  return nodes
+  return items
 }
 
 // Return default list text (same format as user import)

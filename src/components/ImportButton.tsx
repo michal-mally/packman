@@ -1,10 +1,10 @@
 import React, { useRef, useState } from 'react'
 import ConfirmModal from './ConfirmModal'
-import { nodesFromText } from '../lib/imports'
-import type { Node } from '../types'
+import { itemsFromText } from '../lib/imports'
+import type { Item } from '../types'
 
 export type ImportButtonProps = {
-  onImport: (nodes: Node[]) => void
+  onImport: (items: Item[]) => void
   buttonClassName?: string
   label?: string
 }
@@ -12,7 +12,7 @@ export type ImportButtonProps = {
 export default function ImportButton({ onImport, buttonClassName = 'btn small', label = 'Import list' }: ImportButtonProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [showImport, setShowImport] = useState(false)
-  const [pendingImport, setPendingImport] = useState<Node[] | null>(null)
+  const [pendingImport, setPendingImport] = useState<Item[] | null>(null)
 
   const onClickImport = () => {
     fileInputRef.current?.click()
@@ -25,12 +25,12 @@ export default function ImportButton({ onImport, buttonClassName = 'btn small', 
     if (!file) return
     try {
       const text = await file.text()
-      const parsedNodes = nodesFromText(text)
-      if (parsedNodes.length === 0) {
+      const parsedItems = itemsFromText(text)
+      if (parsedItems.length === 0) {
         window.alert('No items found in the uploaded file. Use 2-space indentation to nest groups/items.')
         return
       }
-      setPendingImport(parsedNodes)
+      setPendingImport(parsedItems)
       setShowImport(true)
     } catch (err) {
       console.error(err)

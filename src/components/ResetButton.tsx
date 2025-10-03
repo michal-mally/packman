@@ -1,19 +1,21 @@
 import React, { useState } from 'react'
 import ConfirmModal from './ConfirmModal'
-import { nodesFromText, defaultListText } from '../lib/imports'
-import type { Node } from '../types'
+import { itemsFromText, defaultListText } from '../lib/imports'
+import type { Item } from '../types'
 
-export default function ResetButton({ onReset }: { onReset: (nodes: Node[]) => void }) {
+export default function ResetButton({ onReset }: { onReset: (items: Item[]) => void }) {
   const [open, setOpen] = useState(false)
 
   const handleClick = () => setOpen(true)
   const handleCancel = () => setOpen(false)
   const handleConfirm = () => {
     const text = defaultListText()
-    const result = nodesFromText(text)
+    const result = itemsFromText(text)
     onReset(result)
     try {
       localStorage.removeItem('packman.nodes.v2')
+      localStorage.removeItem('packman.items.v3')
+      localStorage.removeItem('packman.state.v1')
     } catch {}
     setOpen(false)
   }

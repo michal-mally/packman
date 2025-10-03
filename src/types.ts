@@ -1,8 +1,7 @@
-export type ItemStatus = 'default' | 'packed' | 'not-needed'
+export type ItemState = null | 'packed' | 'not-needed'
 
-export type Node = {
+export type Item = {
   id: string
   name: string
-  status: ItemStatus
   parentId: string | null
 }

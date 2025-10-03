@@ -1,5 +1,5 @@
 import React from 'react'
-import type { ItemStatus, Node } from '../types'
+import type { Item, ItemState } from '../types'
 import checkIcon from '../assets/check.svg'
 import minusIcon from '../assets/minus.svg'
 import restoreIcon from '../assets/restore.svg'
@@ -8,9 +8,12 @@ export type ListMode = 'to-pack' | 'packed' | 'not-needed'
 
 export type ListSectionProps = {
   mode: ListMode
-  orderedGroups: Node[]
-  childrenByGroup: Map<string, Node[]>
+  orderedGroups: Item[]
+  childrenByGroup: Map<string, Item[]>
   idsWithChildren: Set<string>
+  items: Item[]
+  stateMap: Record<string, ItemState>
+  setStateMap: React.Dispatch<React.SetStateAction<Record<string, ItemState>>>
   // unified count of visible entries in this section
   count?: number
   // custom empty state component to render when the section is empty
@@ -18,7 +21,6 @@ export type ListSectionProps = {
   // interaction/animation helpers
   animating: { id: string; type: 'packed' | 'not-needed' } | null
   setAnimating: React.Dispatch<React.SetStateAction<{ id: string; type: 'packed' | 'not-needed' } | null>>
-  setNodes: React.Dispatch<React.SetStateAction<Node[]>>
 }
 
 export default function ListSection(props: ListSectionProps) {
@@ -27,24 +29,26 @@ export default function ListSection(props: ListSectionProps) {
     orderedGroups,
     childrenByGroup,
     idsWithChildren,
+    items,
+    stateMap,
+    setStateMap,
     count = 0,
     emptyComponent,
     animating,
     setAnimating,
-    setNodes,
   } = props
 
   // Local helpers (identical across lists)
   const indentClass = (depth: number) => `indent-${Math.min(depth, 4)}`
 
-  const setStatus = (id: string, status: ItemStatus) => {
-    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, status } : n)))
+  const setStatus = (id: string, state: ItemState) => {
+    setStateMap((prev) => ({ ...prev, [id]: state }))
   }
 
-  const setGroupStatus = (groupId: string, status: ItemStatus) => {
-    setNodes((prev) => {
+  const setGroupStatus = (groupId: string, state: ItemState) => {
+    setStateMap((prev) => {
       const map = new Map<string, string[]>()
-      for (const n of prev) {
+      for (const n of items) {
         if (n.parentId) {
           const arr = map.get(n.parentId) ?? []
           arr.push(n.id)
@@ -58,26 +62,28 @@ export default function ListSection(props: ListSectionProps) {
       }
       const all = new Set<string>()
       collect(groupId, all)
-      return prev.map((n) => (all.has(n.id) ? { ...n, status } : n))
+      const next: Record<string, ItemState> = { ...prev }
+      for (const id of all) next[id] = state
+      return next
     })
   }
 
   const restoreGroup = (groupId: string) => {
-    setNodes((prev) => prev.map((n) => (n.id === groupId ? { ...n, status: 'default' } : n)))
+    setStateMap((prev) => ({ ...prev, [groupId]: null }))
   }
 
   const restore = (id: string) => {
-    setNodes((prev) => {
-      const byId = new Map(prev.map((n) => [n.id, n] as const))
+    setStateMap((prev) => {
+      const byId = new Map(items.map((n) => [n.id, n] as const))
       const target = byId.get(id)
       if (!target) return prev
-      let next = prev.map((n) => (n.id === id ? { ...n, status: 'default' as ItemStatus } : n))
+      const next: Record<string, ItemState> = { ...prev, [id]: null }
       let p = target.parentId
       while (p) {
         const parent = byId.get(p)
         if (!parent) break
-        if (parent.status !== 'default') {
-          next = next.map((n) => (n.id === p ? { ...n, status: 'default' } : n))
+        if (next[p] !== null) {
+          next[p] = null
         }
         p = parent.parentId
       }
@@ -94,13 +100,13 @@ export default function ListSection(props: ListSectionProps) {
     }, 350)
   }
 
-  const hasDescendantWithStatus = (id: string, status: ItemStatus): boolean => {
+  const hasDescendantWithStatus = (id: string, status: ItemState): boolean => {
     const stack = [id]
     while (stack.length) {
       const cur = stack.pop()!
       const kids = childrenByGroup.get(cur) ?? []
       for (const k of kids) {
-        if (k.status === status) return true
+        if (stateMap[k.id] === status) return true
         stack.push(k.id)
       }
     }
@@ -113,7 +119,7 @@ export default function ListSection(props: ListSectionProps) {
       const cur = stack.pop()!
       const kids = childrenByGroup.get(cur) ?? []
       for (const k of kids) {
-        if (k.status === 'default') return true
+        if (stateMap[k.id] === null) return true
         stack.push(k.id)
       }
     }
@@ -123,7 +129,7 @@ export default function ListSection(props: ListSectionProps) {
   const renderToPackSubtree = (parentId: string, depth: number): React.ReactNode => {
     const children = childrenByGroup.get(parentId) ?? []
     return children
-      .filter((n) => n.status === 'default')
+      .filter((n) => stateMap[n.id] === null)
       .map((n) => {
         const childHasChildren = idsWithChildren.has(n.id)
         if (childHasChildren) {
@@ -166,21 +172,21 @@ export default function ListSection(props: ListSectionProps) {
       })
   }
 
-  const renderStatusSubtree = (parentId: string, depth: number, status: ItemStatus): React.ReactNode => {
+  const renderStatusSubtree = (parentId: string, depth: number, status: ItemState): React.ReactNode => {
     const children = childrenByGroup.get(parentId) ?? []
     const parts: React.ReactNode[] = []
     for (const n of children) {
       const isGroup = idsWithChildren.has(n.id)
       if (isGroup) {
         const any = hasDescendantWithStatus(n.id, status)
-        const showGroup = n.status === status || any
+        const showGroup = stateMap[n.id] === status || any
         if (showGroup) {
           const hasDefaults = hasDefaultDescendants(n.id)
           parts.push(
             <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
               <span className="title">{n.name}</span>
               <div className="actions">
-                {n.status === status && !hasDefaults && (
+                {stateMap[n.id] === status && !hasDefaults && (
                   <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(n.id)} aria-label="Restore group to To pack">
                     <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Restore</span>
@@ -196,7 +202,7 @@ export default function ListSection(props: ListSectionProps) {
           )
         }
       } else {
-        if (n.status === status) {
+        if (stateMap[n.id] === status) {
           parts.push(
             <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
               <span className="title">{n.name}</span>
@@ -226,7 +232,7 @@ export default function ListSection(props: ListSectionProps) {
               <span className="badge" aria-label={`To pack count: ${count}`}>{count}</span>
             </h2>
             {orderedGroups
-              .filter((g) => g.status === 'default')
+              .filter((g) => stateMap[g.id] === null)
               .map((g) => (
                 <div key={g.id} className="group">
                   <div className={`item ${indentClass(0)}`}>
@@ -251,7 +257,7 @@ export default function ListSection(props: ListSectionProps) {
     )
   }
 
-  const status: ItemStatus = mode === 'packed' ? 'packed' : 'not-needed'
+  const status: ItemState = mode === 'packed' ? 'packed' : 'not-needed'
   const isNotNeeded = status === 'not-needed'
   const empty = count === 0
 
@@ -266,7 +272,7 @@ export default function ListSection(props: ListSectionProps) {
       )}
       {!empty && orderedGroups.map((g) => {
         const any = hasDescendantWithStatus(g.id, status)
-        const showGroup = g.status === status || any
+        const showGroup = stateMap[g.id] === status || any
         if (!showGroup) return null
         const hasDefaults = hasDefaultDescendants(g.id)
         return (
@@ -275,7 +281,7 @@ export default function ListSection(props: ListSectionProps) {
               <li className={`item crossed ${isNotNeeded ? 'dim' : ''} ${indentClass(0)}`}>
                 <span className="title">{g.name}</span>
                 <div className="actions">
-                  {g.status === status && !hasDefaults && (
+                  {stateMap[g.id] === status && !hasDefaults && (
                     <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(g.id)} aria-label="Restore group to To pack">
                       <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                       <span className="btn-label">Restore</span>
