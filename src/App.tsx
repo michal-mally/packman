@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import luggageSvg from './assets/luggage.svg?raw'
-import ConfirmModal from './components/ConfirmModal'
 import ImportButton from './components/ImportButton'
+import ResetButton from './components/ResetButton'
 import { nodesFromText, defaultListText } from './lib/imports'
 import type { ItemStatus, Node } from './types'
 
@@ -77,8 +77,6 @@ function App() {
   })
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
-  const [showReset, setShowReset] = useState(false)
-
 
   // Derived structures
   const groups = useMemo(() => nodes.filter((n) => n.parentId === null), [nodes])
@@ -187,20 +185,7 @@ function App() {
     })
   }
 
-  const confirmReset = () => {
-      const text = defaultListText()
-      const result = nodesFromText(text)
-      setNodes(result)
-      try {
-        localStorage.removeItem(STORAGE_KEY)
-      } catch {}
-      setShowReset(false)
-    }
-
-    const cancelReset = () => setShowReset(false)
-
-
-    const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
+  const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
     // Prevent overlapping animations; keep UX simple
     if (animating) return
     setAnimating({ id, type })
@@ -209,11 +194,6 @@ function App() {
       setStatus(id, type)
       setAnimating(null)
     }, 350)
-  }
-
-  const resetAll = () => {
-    // Show custom modal instead of native confirm
-    setShowReset(true)
   }
 
   // Helpers for recursive views
@@ -340,9 +320,7 @@ function App() {
          <p className="subtitle">A simple trip packing checklist</p>
          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
            <ImportButton onImport={(newNodes) => setNodes(newNodes)} />
-           <button className="btn small ghost" onClick={resetAll} aria-label="Reset all items to initial state">
-             Reset
-           </button>
+           <ResetButton onReset={(newNodes) => setNodes(newNodes)} />
          </div>
        </header>
 
@@ -437,16 +415,6 @@ function App() {
           })}
         </section>
       </main>
-
-      <ConfirmModal
-        open={showReset}
-        title="Reset to default list?"
-        message="This will remove your current items and restore the original default list. This action cannot be undone."
-        confirmLabel="Reset"
-        cancelLabel="Cancel"
-        onCancel={cancelReset}
-        onConfirm={confirmReset}
-      />
 
     </div>
   )
