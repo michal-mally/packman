@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 
 export type ItemStatus = 'default' | 'packed' | 'not-needed'
@@ -56,6 +56,31 @@ const initialNames = [
   'Snacks',
 ]
 
+function parseUserList(text: string): { items: Omit<Item, 'id'>[] } {
+  const lines = text.replace(/\r/g, '').split('\n')
+  const result: Omit<Item, 'id'>[] = []
+  let currentGroup: string | null = null
+  for (const raw of lines) {
+    const line = raw.replace(/\s+$/g, '')
+    if (line.trim().length === 0) continue
+    const match = line.match(/^(\s*)/)
+    const indent = match ? match[1].length : 0
+    if (indent === 0) {
+      // Group header
+      currentGroup = line.trim()
+      continue
+    }
+    if (indent === 2) {
+      const name = line.slice(2).trim()
+      if (name.length === 0) continue
+      result.push({ name, status: 'default', category: currentGroup ?? 'Other' })
+      continue
+    }
+    // For any other indentation, ignore the line as invalid per spec
+  }
+  return { items: result }
+}
+
 function App() {
   const [items, setItems] = useState<Item[]>(() => {
     try {
@@ -81,6 +106,34 @@ function App() {
   })
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+  const onClickImport = () => {
+    fileInputRef.current?.click()
+  }
+
+  const onFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
+    const file = e.target.files?.[0]
+    // Reset input value so selecting the same file again re-triggers change
+    e.currentTarget.value = ''
+    if (!file) return
+    try {
+      const text = await file.text()
+      const { items: parsed } = parseUserList(text)
+      if (parsed.length === 0) {
+        window.alert('No items found in the uploaded file. Use format:\nGroup\n  Item\n  Item')
+        return
+      }
+      if (!window.confirm('Importing will replace your current list (and keep Reset to defaults). Continue?')) {
+        return
+      }
+      const next: Item[] = parsed.map((it, i) => ({ id: String(i + 1), ...it }))
+      setItems(next)
+    } catch (err) {
+      console.error(err)
+      window.alert('Failed to read the file. Please ensure it is a plain text (.txt) file.')
+    }
+  }
 
   const lists = useMemo(() => {
     return {
@@ -149,9 +202,21 @@ function App() {
        <header className="header">
          <h1>Packman</h1>
          <p className="subtitle">A simple trip packing checklist</p>
-         <button className="btn small ghost" onClick={resetAll} aria-label="Reset all items to initial state">
-           Reset
-         </button>
+         <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+           <button className="btn small" onClick={onClickImport} aria-label="Import items list from a text file">
+             Import list
+           </button>
+           <button className="btn small ghost" onClick={resetAll} aria-label="Reset all items to initial state">
+             Reset
+           </button>
+           <input
+             ref={fileInputRef}
+             type="file"
+             accept=".txt,text/plain"
+             onChange={onFileSelected}
+             style={{ display: 'none' }}
+           />
+         </div>
        </header>
 
       <main className="columns">
