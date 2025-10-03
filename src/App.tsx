@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+import defaultListRaw from './default-list.txt?raw'
 
 export type ItemStatus = 'default' | 'packed' | 'not-needed'
 
@@ -35,27 +36,6 @@ function categorize(name: string): string {
   return 'Other'
 }
 
-const initialNames = [
-  'Passport/ID',
-  'Boarding pass',
-  'Wallet',
-  'Phone & charger',
-  'Laptop/tablet & charger',
-  'Headphones',
-  'Travel adapter',
-  'Toothbrush & toothpaste',
-  'Deodorant',
-  'Medications',
-  'Socks',
-  'Underwear',
-  'T-shirts',
-  'Pants/Shorts',
-  'Jacket/Sweater',
-  'Shoes',
-  'Sunglasses',
-  'Water bottle',
-  'Snacks',
-]
 
 function parseUserList(text: string): { items: { name: string; status: ItemStatus; category?: string }[] } {
   const lines = text.replace(/\r/g, '').split('\n')
@@ -80,6 +60,34 @@ function parseUserList(text: string): { items: { name: string; status: ItemStatu
     // For any other indentation, ignore the line as invalid per spec
   }
   return { items: result }
+}
+
+// Build Node[] from parsed items (used by import, default initialization, and reset)
+function buildNodesFromParsed(items: { name: string; status: ItemStatus; category?: string }[]): Node[] {
+  const cats = Array.from(new Set(items.map((it) => it.category ?? categorize(it.name))))
+  const groupIdByCat = new Map<string, string>()
+  const nodes: Node[] = []
+  for (const c of cats) {
+    const gid = `g:${c}`
+    groupIdByCat.set(c, gid)
+    nodes.push({ id: gid, name: c, status: 'default', parentId: null })
+  }
+  items.forEach((it, i) => {
+    const cat = it.category ?? categorize(it.name)
+    nodes.push({ id: `i:${i + 1}`, name: it.name, status: 'default', parentId: groupIdByCat.get(cat)! })
+  })
+  return nodes
+}
+
+function nodesFromText(text: string): Node[] {
+  const { items } = parseUserList(text)
+  return buildNodesFromParsed(items)
+}
+
+// Compose default list text in the same format as import feature (Group + 2-space indented items)
+function defaultListText(): string {
+  // Now sourced from a hardcoded text file in the same format as user input
+  return (defaultListRaw || '').replace(/\r/g, '').trim() + '\n'
 }
 
 function App() {
@@ -144,20 +152,9 @@ function App() {
         }
       }
     } catch {}
-    // Fallback: build from initialNames
-    const cats = Array.from(new Set(initialNames.map((n) => categorize(n))))
-    const result: Node[] = []
-    const groupIdByCat = new Map<string, string>()
-    for (const c of cats) {
-      const gid = `g:${c}`
-      groupIdByCat.set(c, gid)
-      result.push({ id: gid, name: c, status: 'default', parentId: null })
-    }
-    initialNames.forEach((name, i) => {
-      const cat = categorize(name)
-      result.push({ id: `i:${i + 1}`, name, status: 'default', parentId: groupIdByCat.get(cat)! })
-    })
-    return result
+    // Fallback: build from default list using the same pipeline as import
+    const text = defaultListText()
+    return nodesFromText(text)
   })
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
@@ -182,19 +179,8 @@ function App() {
       if (!window.confirm('Importing will replace your current list (and keep Reset to defaults). Continue?')) {
         return
       }
-      // Build unified nodes: create group nodes and child nodes
-      const cats = Array.from(new Set(parsed.map((it) => it.category ?? categorize(it.name))))
-      const groupIdByCat = new Map<string, string>()
-      const next: Node[] = []
-      for (const c of cats) {
-        const gid = `g:${c}`
-        groupIdByCat.set(c, gid)
-        next.push({ id: gid, name: c, status: 'default', parentId: null })
-      }
-      parsed.forEach((it, i) => {
-        const cat = it.category ?? categorize(it.name)
-        next.push({ id: `i:${i + 1}`, name: it.name, status: 'default', parentId: groupIdByCat.get(cat)! })
-      })
+      // Build unified nodes via import pipeline
+      const next = buildNodesFromParsed(parsed)
       setNodes(next)
     } catch (err) {
       console.error(err)
@@ -288,18 +274,8 @@ function App() {
   const resetAll = () => {
     // Optional confirmation to prevent accidental reset
     if (window.confirm('Reset all items to the initial state?')) {
-      const cats = Array.from(new Set(initialNames.map((n) => categorize(n))))
-      const result: Node[] = []
-      const groupIdByCat = new Map<string, string>()
-      for (const c of cats) {
-        const gid = `g:${c}`
-        groupIdByCat.set(c, gid)
-        result.push({ id: gid, name: c, status: 'default', parentId: null })
-      }
-      initialNames.forEach((name, i) => {
-        const cat = categorize(name)
-        result.push({ id: `i:${i + 1}`, name, status: 'default', parentId: groupIdByCat.get(cat)! })
-      })
+      const text = defaultListText()
+      const result = nodesFromText(text)
       setNodes(result)
       try {
         localStorage.removeItem(STORAGE_KEY)
