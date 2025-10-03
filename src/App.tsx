@@ -174,6 +174,27 @@ function App() {
     }
   }, [nodes, idsWithChildren])
 
+  // Count all entries (groups and items) that are actually visible in "To pack"
+  const toPackCount = useMemo(() => {
+    const parentById = new Map(nodes.map((n) => [n.id, n.parentId] as const))
+    const statusById = new Map(nodes.map((n) => [n.id, n.status] as const))
+    const isVisibleInToPack = (id: string): boolean => {
+      // Node must be default and all ancestors default
+      if (statusById.get(id) !== 'default') return false
+      let pid = parentById.get(id)
+      while (pid) {
+        if (statusById.get(pid) !== 'default') return false
+        pid = parentById.get(pid) ?? null
+      }
+      return true
+    }
+    let count = 0
+    for (const n of nodes) {
+      if (isVisibleInToPack(n.id)) count++
+    }
+    return count
+  }, [nodes])
+
   // Use groups in their natural order as defined by the source list (default or imported)
   const orderedGroups = groups
 
@@ -417,7 +438,7 @@ function App() {
 
       <main className="columns">
         <section className="column">
-          <h2>To pack</h2>
+          <h2>To pack <span className="badge" aria-label={`To pack count: ${toPackCount}`}>{toPackCount}</span></h2>
           {leavesByStatus.default.length === 0 && (
             <p className="empty">Nothing left here. Nice!</p>
           )}

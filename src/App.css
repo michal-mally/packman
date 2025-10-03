@@ -36,6 +36,29 @@
   font-size: 1.1rem;
 }
 
+.badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.5rem;
+  min-width: 1.5em;
+  padding: 0 0.5em;
+  height: 1.4em;
+  font-size: 0.85em;
+  border-radius: 999px;
+  background: #e9ecff;
+  color: #2b2e5f;
+  border: 1px solid rgba(0,0,0,0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge {
+    background: rgba(100, 108, 255, 0.2);
+    color: rgba(255,255,255,0.9);
+    border-color: rgba(255,255,255,0.18);
+  }
+}
+
 .items {
   list-style: none;
   padding: 0;
