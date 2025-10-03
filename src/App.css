@@ -86,6 +86,12 @@
   gap: 0.5rem;
 }
 
+@media (prefers-color-scheme: dark) {
+  .item {
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+}
+
 .item.crossed .title {
   text-decoration: line-through;
 }
@@ -181,7 +187,10 @@
 }
 
 .group {
-  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
 }
 
 .group-title {
