@@ -13,7 +13,6 @@ export default function ResetButton({ onReset }: { onReset: (items: Item[]) => v
     const result = itemsFromText(text)
     onReset(result)
     try {
-      localStorage.removeItem('packman.nodes.v2')
       localStorage.removeItem('packman.items.v3')
       localStorage.removeItem('packman.state.v1')
     } catch {}

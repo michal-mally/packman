@@ -22,20 +22,6 @@ function App() {
           return parsed as Item[]
         }
       }
-      // Migrate from legacy nodes v2
-      const legacyNodesRaw = localStorage.getItem('packman.nodes.v2')
-      if (legacyNodesRaw) {
-        const arr = JSON.parse(legacyNodesRaw)
-        if (Array.isArray(arr)) {
-          const items: Item[] = arr
-            .filter((n: any) => n && typeof n.id === 'string' && typeof n.name === 'string' && 'parentId' in n)
-            .map((n: any) => ({ id: n.id, name: n.name, parentId: n.parentId ?? null }))
-          if (items.length > 0) {
-            try { localStorage.setItem(ITEMS_STORAGE_KEY, JSON.stringify(items)) } catch {}
-            return items
-          }
-        }
-      }
     } catch {}
     const text = defaultListText()
     return itemsFromText(text)
@@ -49,24 +35,6 @@ function App() {
         const parsed = JSON.parse(rawState)
         if (parsed && typeof parsed === 'object') {
           return parsed as Record<string, ItemState>
-        }
-      }
-      // Migrate state from legacy nodes v2 if present
-      const legacyNodesRaw = localStorage.getItem('packman.nodes.v2')
-      if (legacyNodesRaw) {
-        const arr = JSON.parse(legacyNodesRaw)
-        if (Array.isArray(arr)) {
-          const map: Record<string, ItemState> = {}
-          for (const n of arr) {
-            if (n && typeof n.id === 'string' && ('status' in n)) {
-              // legacy default => null
-              map[n.id] = n.status === 'default' ? null : (n.status === 'not-needed' ? 'not-needed' : 'packed')
-            }
-          }
-          try { localStorage.setItem(STATE_STORAGE_KEY, JSON.stringify(map)) } catch {}
-          // clear legacy key
-          try { localStorage.removeItem('packman.nodes.v2') } catch {}
-          return map
         }
       }
     } catch {}
