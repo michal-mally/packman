@@ -95,14 +95,6 @@ function App() {
 
   const idsWithChildren = useMemo(() => new Set(Array.from(childrenByGroup.keys())), [childrenByGroup])
 
-  const leavesByStatus = useMemo(() => {
-    const isLeaf = (n: Node) => !idsWithChildren.has(n.id)
-    return {
-      default: nodes.filter((n) => isLeaf(n) && n.status === 'default'),
-      packed: nodes.filter((n) => isLeaf(n) && n.status === 'packed'),
-      notNeeded: nodes.filter((n) => isLeaf(n) && n.status === 'not-needed'),
-    }
-  }, [nodes, idsWithChildren])
 
   // Count all entries (groups and items) that are actually visible in "To pack"
   const toPackCount = useMemo(() => {
@@ -127,6 +119,91 @@ function App() {
 
   // Use groups in their natural order as defined by the source list (default or imported)
   const orderedGroups = groups
+
+  // Count visible entries for status sections (groups + items actually rendered)
+  const packedCount = useMemo(() => {
+    const status: ItemStatus = 'packed'
+    let count = 0
+    const hasDescWithStatus = (id: string): boolean => {
+      const stack = [id]
+      while (stack.length) {
+        const cur = stack.pop()!
+        const kids = childrenByGroup.get(cur) ?? []
+        for (const k of kids) {
+          if (k.status === status) return true
+          stack.push(k.id)
+        }
+      }
+      return false
+    }
+    const visit = (parentId: string) => {
+      const children = childrenByGroup.get(parentId) ?? []
+      for (const n of children) {
+        const isGroup = idsWithChildren.has(n.id)
+        if (isGroup) {
+          const any = hasDescWithStatus(n.id)
+          const showGroup = n.status === status || any
+          if (showGroup) {
+            count++
+            visit(n.id)
+          }
+        } else {
+          if (n.status === status) count++
+        }
+      }
+    }
+    for (const g of orderedGroups) {
+      const any = hasDescWithStatus(g.id)
+      const showGroup = g.status === status || any
+      if (showGroup) {
+        count++
+        visit(g.id)
+      }
+    }
+    return count
+  }, [orderedGroups, childrenByGroup, idsWithChildren])
+
+  const notNeededCount = useMemo(() => {
+    const status: ItemStatus = 'not-needed'
+    let count = 0
+    const hasDescWithStatus = (id: string): boolean => {
+      const stack = [id]
+      while (stack.length) {
+        const cur = stack.pop()!
+        const kids = childrenByGroup.get(cur) ?? []
+        for (const k of kids) {
+          if (k.status === status) return true
+          stack.push(k.id)
+        }
+      }
+      return false
+    }
+    const visit = (parentId: string) => {
+      const children = childrenByGroup.get(parentId) ?? []
+      for (const n of children) {
+        const isGroup = idsWithChildren.has(n.id)
+        if (isGroup) {
+          const any = hasDescWithStatus(n.id)
+          const showGroup = n.status === status || any
+          if (showGroup) {
+            count++
+            visit(n.id)
+          }
+        } else {
+          if (n.status === status) count++
+        }
+      }
+    }
+    for (const g of orderedGroups) {
+      const any = hasDescWithStatus(g.id)
+      const showGroup = g.status === status || any
+      if (showGroup) {
+        count++
+        visit(g.id)
+      }
+    }
+    return count
+  }, [orderedGroups, childrenByGroup, idsWithChildren])
 
   // Persist nodes
   useEffect(() => {
@@ -331,7 +408,7 @@ function App() {
           orderedGroups={orderedGroups}
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
-          toPackCount={toPackCount}
+          count={toPackCount}
           emptyComponent={(
             <div className="empty-hero" aria-live="polite">
               {luggageSvg && <div dangerouslySetInnerHTML={{ __html: luggageSvg }} />}
@@ -349,7 +426,7 @@ function App() {
           orderedGroups={orderedGroups}
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
-          packedLeavesCount={leavesByStatus.packed.length}
+          count={packedCount}
           emptyComponent={<p className="empty">No items packed yet.</p>}
           animating={animating}
           setAnimating={setAnimating}
@@ -361,7 +438,7 @@ function App() {
           orderedGroups={orderedGroups}
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
-          notNeededLeavesCount={leavesByStatus.notNeeded.length}
+          count={notNeededCount}
           emptyComponent={<p className="empty">No items marked as not needed.</p>}
           animating={animating}
           setAnimating={setAnimating}

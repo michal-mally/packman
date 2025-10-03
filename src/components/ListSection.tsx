@@ -11,10 +11,8 @@ export type ListSectionProps = {
   orderedGroups: Node[]
   childrenByGroup: Map<string, Node[]>
   idsWithChildren: Set<string>
-  // counts and visuals for headers/empty states
-  toPackCount?: number
-  packedLeavesCount?: number
-  notNeededLeavesCount?: number
+  // unified count of visible entries in this section
+  count?: number
   // custom empty state component to render when the section is empty
   emptyComponent?: React.ReactNode
   // interaction/animation helpers
@@ -29,9 +27,7 @@ export default function ListSection(props: ListSectionProps) {
     orderedGroups,
     childrenByGroup,
     idsWithChildren,
-    toPackCount = 0,
-    packedLeavesCount = 0,
-    notNeededLeavesCount = 0,
+    count = 0,
     emptyComponent,
     animating,
     setAnimating,
@@ -221,13 +217,13 @@ export default function ListSection(props: ListSectionProps) {
   if (mode === 'to-pack') {
     return (
       <section className="column">
-        {toPackCount === 0 ? (
+        {count === 0 ? (
           <>{emptyComponent}</>
         ) : (
           <>
             <h2>
               To pack{' '}
-              <span className="badge" aria-label={`To pack count: ${toPackCount}`}>{toPackCount}</span>
+              <span className="badge" aria-label={`To pack count: ${count}`}>{count}</span>
             </h2>
             {orderedGroups
               .filter((g) => g.status === 'default')
@@ -257,11 +253,14 @@ export default function ListSection(props: ListSectionProps) {
 
   const status: ItemStatus = mode === 'packed' ? 'packed' : 'not-needed'
   const isNotNeeded = status === 'not-needed'
-  const empty = status === 'packed' ? packedLeavesCount === 0 : notNeededLeavesCount === 0
+  const empty = count === 0
 
   return (
     <section className="column">
-      <h2>{status === 'packed' ? 'Packed' : 'Not needed'}</h2>
+      <h2>
+        {status === 'packed' ? 'Packed' : 'Not needed'}{' '}
+        <span className="badge" aria-label={`${status === 'packed' ? 'Packed' : 'Not needed'} count: ${count}`}>{count}</span>
+      </h2>
       {empty && (
         <>{emptyComponent}</>
       )}
