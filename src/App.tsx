@@ -120,6 +120,9 @@ function App() {
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [showReset, setShowReset] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [pendingImport, setPendingImport] = useState<Node[] | null>(null)
 
   const onClickImport = () => {
     fileInputRef.current?.click()
@@ -137,10 +140,9 @@ function App() {
         window.alert('No items found in the uploaded file. Use 2-space indentation to nest groups/items.')
         return
       }
-      if (!window.confirm('Importing will replace your current list (and keep Reset to defaults). Continue?')) {
-        return
-      }
-      setNodes(parsedNodes)
+      // Use custom modal confirmation instead of native confirm
+      setPendingImport(parsedNodes)
+      setShowImport(true)
     } catch (err) {
       console.error(err)
       window.alert('Failed to read the file. Please ensure it is a plain text (.txt) file.')
@@ -233,7 +235,32 @@ function App() {
     })
   }
 
-  const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
+  const confirmReset = () => {
+      const text = defaultListText()
+      const result = nodesFromText(text)
+      setNodes(result)
+      try {
+        localStorage.removeItem(STORAGE_KEY)
+      } catch {}
+      setShowReset(false)
+    }
+
+    const cancelReset = () => setShowReset(false)
+
+    const confirmImport = () => {
+      if (pendingImport && pendingImport.length > 0) {
+        setNodes(pendingImport)
+      }
+      setPendingImport(null)
+      setShowImport(false)
+    }
+
+    const cancelImport = () => {
+      setPendingImport(null)
+      setShowImport(false)
+    }
+
+    const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
     // Prevent overlapping animations; keep UX simple
     if (animating) return
     setAnimating({ id, type })
@@ -245,15 +272,8 @@ function App() {
   }
 
   const resetAll = () => {
-    // Optional confirmation to prevent accidental reset
-    if (window.confirm('Reset all items to the initial state?')) {
-      const text = defaultListText()
-      const result = nodesFromText(text)
-      setNodes(result)
-      try {
-        localStorage.removeItem(STORAGE_KEY)
-      } catch {}
-    }
+    // Show custom modal instead of native confirm
+    setShowReset(true)
   }
 
   // Helpers for recursive views
@@ -479,6 +499,48 @@ function App() {
           })}
         </section>
       </main>
+
+      {showReset && (
+        <div className="modal-backdrop" onClick={cancelReset}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reset-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="reset-title" style={{ marginTop: 0 }}>Reset to default list?</h3>
+            <p style={{ marginTop: 0 }}>
+              This will remove your current items and restore the original default list. This action cannot be undone.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={cancelReset}>Cancel</button>
+              <button className="btn" onClick={confirmReset}>Reset</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImport && (
+        <div className="modal-backdrop" onClick={cancelImport}>
+          <div
+            className="modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="import-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="import-title" style={{ marginTop: 0 }}>Import new list?</h3>
+            <p style={{ marginTop: 0 }}>
+              Importing will replace your current list. You can still use Reset to go back to the default list.
+            </p>
+            <div className="modal-actions">
+              <button className="btn ghost" onClick={cancelImport}>Cancel</button>
+              <button className="btn" onClick={confirmImport}>Import</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
