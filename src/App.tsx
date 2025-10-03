@@ -5,7 +5,7 @@ import ImportButton from './components/ImportButton'
 import ResetButton from './components/ResetButton'
 import ListSection from './components/ListSection'
 import { itemsFromText, defaultListText } from './lib/imports'
-import type { Item, ItemState } from './types'
+import type { Item, ItemState, ItemActions } from './types'
 
 const ITEMS_STORAGE_KEY = 'packman.items.v3'
 const STATE_STORAGE_KEY = 'packman.state.v1'
@@ -247,8 +247,15 @@ function App() {
     setStateMap((prev) => ({ ...prev, [group.id]: null }))
   }
 
-  // alias to satisfy request's naming typo
-  const notNeded = notNeededItem
+  // Single actions API passed to list components
+  const actions: ItemActions = {
+    packItem,
+    notNeededItem,
+    restoreItem,
+    packGroup,
+    notNeededGroup,
+    restoreGroup,
+  }
 
   return (
      <div className="app">
@@ -283,12 +290,7 @@ function App() {
           )}
           animating={animating}
           setAnimating={setAnimating}
-          packItem={packItem}
-          notNeededItem={notNeededItem}
-          restoreItem={restoreItem}
-          packGroup={packGroup}
-          notNeededGroup={notNeededGroup}
-          restoreGroup={restoreGroup}
+          actions={actions}
         />
 
         <ListSection
@@ -302,12 +304,7 @@ function App() {
           emptyComponent={<p className="empty">No items packed yet.</p>}
           animating={animating}
           setAnimating={setAnimating}
-          packItem={packItem}
-          notNeededItem={notNeededItem}
-          restoreItem={restoreItem}
-          packGroup={packGroup}
-          notNeededGroup={notNeededGroup}
-          restoreGroup={restoreGroup}
+          actions={actions}
         />
 
         <ListSection
@@ -321,12 +318,7 @@ function App() {
           emptyComponent={<p className="empty">No items marked as not needed.</p>}
           animating={animating}
           setAnimating={setAnimating}
-          packItem={packItem}
-          notNeededItem={notNeededItem}
-          restoreItem={restoreItem}
-          packGroup={packGroup}
-          notNeededGroup={notNeededGroup}
-          restoreGroup={restoreGroup}
+          actions={actions}
         />
       </main>
 
