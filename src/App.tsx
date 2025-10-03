@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import defaultListRaw from './default-list.txt?raw'
+import luggageSvg from './assets/luggage.svg?raw'
 
 export type ItemStatus = 'default' | 'packed' | 'not-needed'
 
@@ -440,65 +441,7 @@ function App() {
         <section className="column">
           {toPackCount === 0 ? (
             <div className="empty-hero" aria-live="polite">
-              <svg className="luggage" viewBox="0 0 180 180" role="img" aria-label="Colorful luggage with travel stickers">
-                <defs>
-                  <linearGradient id="case" x1="0" y1="0" x2="1" y2="1">
-                    <stop offset="0%" stopColor="#FF9A9E"/>
-                    <stop offset="50%" stopColor="#FECF6A"/>
-                    <stop offset="100%" stopColor="#8EC5FC"/>
-                  </linearGradient>
-                  <linearGradient id="strap" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#3b2a6f"/>
-                    <stop offset="100%" stopColor="#2a1f55"/>
-                  </linearGradient>
-                  <radialGradient id="shadow2" cx="50%" cy="100%" r="60%">
-                    <stop offset="0%" stopColor="rgba(0,0,0,0.22)"/>
-                    <stop offset="100%" stopColor="rgba(0,0,0,0)"/>
-                  </radialGradient>
-                </defs>
-                {/* wheels */}
-                <circle cx="60" cy="138" r="6" fill="#2d2d2d"/>
-                <circle cx="120" cy="138" r="6" fill="#2d2d2d"/>
-                {/* handle */}
-                <rect x="78" y="18" width="24" height="8" rx="4" fill="#2f2f2f"/>
-                <rect x="84" y="26" width="12" height="10" rx="2" fill="#444"/>
-                {/* case */}
-                <rect x="36" y="38" width="108" height="92" rx="12" fill="url(#case)" stroke="rgba(0,0,0,0.2)"/>
-                {/* corner caps */}
-                <circle cx="44" cy="46" r="6" fill="#ffffff" opacity="0.35"/>
-                <circle cx="140" cy="46" r="6" fill="#ffffff" opacity="0.35"/>
-                <circle cx="44" cy="122" r="6" fill="#000000" opacity="0.08"/>
-                <circle cx="140" cy="122" r="6" fill="#000000" opacity="0.08"/>
-                {/* straps */}
-                <rect x="62" y="38" width="12" height="92" fill="url(#strap)" opacity="0.9"/>
-                <rect x="106" y="38" width="12" height="92" fill="url(#strap)" opacity="0.9"/>
-                {/* buckles */}
-                <rect x="60" y="74" width="16" height="10" rx="2" fill="#ffd166" stroke="rgba(0,0,0,0.15)"/>
-                <rect x="104" y="74" width="16" height="10" rx="2" fill="#ffd166" stroke="rgba(0,0,0,0.15)"/>
-                {/* ribbing */}
-                <g opacity="0.25" stroke="#ffffff">
-                  <line x1="56" y1="42" x2="56" y2="126"/>
-                  <line x1="84" y1="42" x2="84" y2="126"/>
-                  <line x1="112" y1="42" x2="112" y2="126"/>
-                </g>
-                {/* stickers */}
-                <g>
-                  <rect x="48" y="56" width="26" height="16" rx="3" fill="#ff6b6b" transform="rotate(-8 48 56)"/>
-                  <text x="61" y="67" textAnchor="middle" fontSize="6" fill="#fff">NYC</text>
-                  <rect x="96" y="56" width="26" height="16" rx="3" fill="#4dabf7" transform="rotate(8 96 56)"/>
-                  <text x="109" y="67" textAnchor="middle" fontSize="6" fill="#fff">PAR</text>
-                  <rect x="66" y="90" width="20" height="14" rx="3" fill="#38d9a9" transform="rotate(-14 66 90)"/>
-                  <text x="76" y="100" textAnchor="middle" fontSize="6" fill="#0b2e1f">TYO</text>
-                  <rect x="112" y="92" width="22" height="14" rx="3" fill="#ffd43b" transform="rotate(12 112 92)"/>
-                  <text x="123" y="102" textAnchor="middle" fontSize="6" fill="#6b5000">RIO</text>
-                  <circle cx="86" cy="108" r="8" fill="#845ef7"/>
-                  <text x="86" y="110.5" textAnchor="middle" fontSize="6" fill="#fff">AUS</text>
-                </g>
-                {/* gloss sweep */}
-                <rect className="gloss" x="24" y="38" width="40" height="92" rx="8" fill="#ffffff" opacity="0.18"/>
-                {/* ground shadow */}
-                <ellipse cx="90" cy="152" rx="56" ry="10" fill="url(#shadow2)" />
-              </svg>
+              <div dangerouslySetInnerHTML={{ __html: luggageSvg }} />
               <h2 className="hero-title">All set! Your luggage is ready.</h2>
               <p className="hero-subtitle">Nothing left to pack. Have a great trip!</p>
             </div>
