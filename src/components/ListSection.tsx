@@ -237,7 +237,7 @@ export default function ListSection(props: ListSectionProps) {
                 <span className="title">{g.name}</span>
                 <div className="actions">
                   {stateMap[g.id] === status && !hasDefaults && (
-                    <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(g)} aria-label="Restore group to To pack">
+                    <button className="btn small ghost restore icon-btn" onClick={() => actions.restoreGroup(g)} aria-label="Restore group to To pack">
                       <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                       <span className="btn-label">Restore</span>
                     </button>
