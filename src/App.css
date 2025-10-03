@@ -237,3 +237,71 @@
     box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.5);
   }
 }
+
+.empty-hero {
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  background: linear-gradient(180deg, rgba(240,242,246,0.6), rgba(240,242,246,0.2));
+}
+
+.empty-hero .luggage {
+  width: 140px;
+  height: 140px;
+  display: block;
+  margin-bottom: 0.5rem;
+}
+
+.hero-title {
+  margin: 0.25rem 0 0.25rem;
+  font-size: 1.15rem;
+}
+
+.hero-subtitle {
+  margin: 0;
+  color: #667085;
+}
+
+@media (prefers-color-scheme: dark) {
+  .empty-hero {
+    border-color: rgba(255,255,255,0.14);
+    background: linear-gradient(180deg, rgba(80,86,104,0.35), rgba(80,86,104,0.15));
+  }
+  .hero-subtitle {
+    color: rgba(255,255,255,0.75);
+  }
+}
+
+
+/* Luggage animations for a more vivid look */
+@keyframes floaty {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+
+@keyframes shine-sweep {
+  0%, 25% { transform: translateX(-70px); opacity: 0; }
+  40% { opacity: 0.22; }
+  100% { transform: translateX(140px); opacity: 0; }
+}
+
+.empty-hero .luggage {
+  will-change: transform;
+  animation: floaty 4.8s ease-in-out infinite;
+}
+
+.empty-hero .luggage .gloss {
+  will-change: transform, opacity;
+  animation: shine-sweep 3s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .empty-hero .luggage,
+  .empty-hero .luggage .gloss {
+    animation: none !important;
+  }
+}
