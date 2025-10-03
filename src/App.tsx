@@ -72,12 +72,28 @@ function App() {
 
   const restore = (id: string) => setStatus(id, 'default')
 
-  return (
-    <div className="app">
-      <header className="header">
-        <h1>Packman</h1>
-        <p className="subtitle">A simple trip packing checklist</p>
-      </header>
+  const resetAll = () => {
+    const initial = initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' as ItemStatus }))
+    // Optional confirmation to prevent accidental reset
+    if (window.confirm('Reset all items to the initial state?')) {
+      setItems(initial)
+      try {
+        // Not strictly required since useEffect will persist the new state,
+        // but this ensures we drop any corrupted value if present.
+        localStorage.removeItem(STORAGE_KEY)
+      } catch {}
+    }
+  }
+ 
+   return (
+     <div className="app">
+       <header className="header">
+         <h1>Packman</h1>
+         <p className="subtitle">A simple trip packing checklist</p>
+         <button className="btn small ghost" onClick={resetAll} aria-label="Reset all items to initial state">
+           Reset
+         </button>
+       </header>
 
       <main className="columns">
         <section className="column">
