@@ -3,17 +3,15 @@ import './App.css'
 
 export type ItemStatus = 'default' | 'packed' | 'not-needed'
 
-type Item = {
+type Node = {
   id: string
   name: string
   status: ItemStatus
-  category?: string
+  parentId: string | null // null means this is a group (root-level item)
 }
 
-const STORAGE_KEY = 'packman.items.v1'
-const GROUP_STORAGE_KEY = 'packman.groups.v1'
-
-type GroupStatusMap = Record<string, ItemStatus>
+const STORAGE_KEY = 'packman.nodes.v2'
+// GROUP_STORAGE_KEY is no longer used; group state is part of Node now
 
 const CATEGORY_ORDER = ['Essentials', 'Electronics', 'Toiletries', 'Clothes', 'Accessories', 'Food', 'Other'] as const
 
@@ -59,9 +57,9 @@ const initialNames = [
   'Snacks',
 ]
 
-function parseUserList(text: string): { items: Omit<Item, 'id'>[] } {
+function parseUserList(text: string): { items: { name: string; status: ItemStatus; category?: string }[] } {
   const lines = text.replace(/\r/g, '').split('\n')
-  const result: Omit<Item, 'id'>[] = []
+  const result: { name: string; status: ItemStatus; category?: string }[] = []
   let currentGroup: string | null = null
   for (const raw of lines) {
     const line = raw.replace(/\s+$/g, '')
@@ -85,48 +83,85 @@ function parseUserList(text: string): { items: Omit<Item, 'id'>[] } {
 }
 
 function App() {
-  const [items, setItems] = useState<Item[]>(() => {
+  const LEGACY_ITEMS_KEY = 'packman.items.v1'
+  const LEGACY_GROUP_KEY = 'packman.groups.v1'
+
+  const [nodes, setNodes] = useState<Node[]>(() => {
+    const okStatuses: ItemStatus[] = ['default', 'packed', 'not-needed']
     try {
       const raw = localStorage.getItem(STORAGE_KEY)
       if (raw) {
         const parsed = JSON.parse(raw)
         if (Array.isArray(parsed)) {
-          const okStatuses: ItemStatus[] = ['default', 'packed', 'not-needed']
           const valid = parsed.every(
-            (it: any) =>
-              it && typeof it.id === 'string' && typeof it.name === 'string' && okStatuses.includes(it.status)
+            (it: any) => it && typeof it.id === 'string' && typeof it.name === 'string' && okStatuses.includes(it.status) && ('parentId' in it)
           )
-          if (valid)
-            return (parsed as Item[]).map((it, idx) => ({
-              ...it,
-              id: typeof it.id === 'string' ? it.id : String(idx + 1),
-              category: it.category ?? categorize(it.name),
-            }))
+          if (valid) return parsed as Node[]
+        }
+      }
+      // Try legacy migration
+      const legacyRaw = localStorage.getItem(LEGACY_ITEMS_KEY)
+      if (legacyRaw) {
+        const arr = JSON.parse(legacyRaw)
+        if (Array.isArray(arr)) {
+          // legacy items have name/status and optional category, no parentId
+          const legacyItems: { id?: string; name: string; status: ItemStatus; category?: string }[] = arr.filter(
+            (it: any) => it && typeof it.name === 'string' && okStatuses.includes(it.status)
+          )
+          if (legacyItems.length > 0) {
+            const legacyGroupStatus = (() => {
+              try {
+                const g = localStorage.getItem(LEGACY_GROUP_KEY)
+                if (!g) return {}
+                const obj = JSON.parse(g)
+                return obj && typeof obj === 'object' ? (obj as Record<string, ItemStatus>) : {}
+              } catch {
+                return {}
+              }
+            })()
+            const cats = Array.from(
+              new Set(legacyItems.map((i) => i.category ?? categorize(i.name)))
+            )
+            const groupIdByCat = new Map<string, string>()
+            const result: Node[] = []
+            for (const c of cats) {
+              const gid = `g:${c}`
+              groupIdByCat.set(c, gid)
+              result.push({ id: gid, name: c, status: legacyGroupStatus[c] ?? 'default', parentId: null })
+            }
+            legacyItems.forEach((it, idx) => {
+              const cat = it.category ?? categorize(it.name)
+              const gid = groupIdByCat.get(cat)!
+              result.push({ id: `i:${idx + 1}`, name: it.name, status: it.status, parentId: gid })
+            })
+            // Clear legacy keys now that we migrated
+            try {
+              localStorage.removeItem(LEGACY_ITEMS_KEY)
+              localStorage.removeItem(LEGACY_GROUP_KEY)
+            } catch {}
+            return result
+          }
         }
       }
     } catch {}
-    return initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default', category: categorize(name) }))
+    // Fallback: build from initialNames
+    const cats = Array.from(new Set(initialNames.map((n) => categorize(n))))
+    const result: Node[] = []
+    const groupIdByCat = new Map<string, string>()
+    for (const c of cats) {
+      const gid = `g:${c}`
+      groupIdByCat.set(c, gid)
+      result.push({ id: gid, name: c, status: 'default', parentId: null })
+    }
+    initialNames.forEach((name, i) => {
+      const cat = categorize(name)
+      result.push({ id: `i:${i + 1}`, name, status: 'default', parentId: groupIdByCat.get(cat)! })
+    })
+    return result
   })
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  // Independent group (category) statuses: groups must be explicitly marked
-  const [groupStatus, setGroupStatusMap] = useState<GroupStatusMap>(() => {
-    try {
-      const raw = localStorage.getItem(GROUP_STORAGE_KEY)
-      if (raw) {
-        const obj = JSON.parse(raw)
-        if (obj && typeof obj === 'object') return obj as GroupStatusMap
-      }
-    } catch {}
-    const cats = Array.from(new Set(
-      (Array.isArray(items) ? items : []).map((i) => i.category ?? categorize(i.name))
-    ))
-    const map: GroupStatusMap = {}
-    for (const c of cats) map[c] = 'default'
-    return map
-  })
 
   const onClickImport = () => {
     fileInputRef.current?.click()
@@ -147,113 +182,95 @@ function App() {
       if (!window.confirm('Importing will replace your current list (and keep Reset to defaults). Continue?')) {
         return
       }
-      const next: Item[] = parsed.map((it, i) => ({ id: String(i + 1), ...it }))
-      setItems(next)
+      // Build unified nodes: create group nodes and child nodes
+      const cats = Array.from(new Set(parsed.map((it) => it.category ?? categorize(it.name))))
+      const groupIdByCat = new Map<string, string>()
+      const next: Node[] = []
+      for (const c of cats) {
+        const gid = `g:${c}`
+        groupIdByCat.set(c, gid)
+        next.push({ id: gid, name: c, status: 'default', parentId: null })
+      }
+      parsed.forEach((it, i) => {
+        const cat = it.category ?? categorize(it.name)
+        next.push({ id: `i:${i + 1}`, name: it.name, status: 'default', parentId: groupIdByCat.get(cat)! })
+      })
+      setNodes(next)
     } catch (err) {
       console.error(err)
       window.alert('Failed to read the file. Please ensure it is a plain text (.txt) file.')
     }
   }
 
-  const lists = useMemo(() => {
-    return {
-      default: items.filter((i) => i.status === 'default'),
-      packed: items.filter((i) => i.status === 'packed'),
-      notNeeded: items.filter((i) => i.status === 'not-needed'),
-    }
-  }, [items])
-
-  const groupByCategory = (arr: Item[]) => {
-    const m = new Map<string, Item[]>()
-    for (const it of arr) {
-      const cat = it.category ?? categorize(it.name)
-      const list = m.get(cat) ?? []
-      list.push(it)
-      m.set(cat, list)
+  // Derived structures
+  const groups = useMemo(() => nodes.filter((n) => n.parentId === null), [nodes])
+  const childrenByGroup = useMemo(() => {
+    const m = new Map<string, Node[]>()
+    for (const n of nodes) {
+      if (n.parentId) {
+        const list = m.get(n.parentId) ?? []
+        list.push(n)
+        m.set(n.parentId, list)
+      }
     }
     return m
+  }, [nodes])
+
+  const leavesByStatus = useMemo(() => {
+    return {
+      default: nodes.filter((n) => n.parentId && n.status === 'default'),
+      packed: nodes.filter((n) => n.parentId && n.status === 'packed'),
+      notNeeded: nodes.filter((n) => n.parentId && n.status === 'not-needed'),
+    }
+  }, [nodes])
+
+  const groupOrder = (arr: Node[]) => {
+    const present = arr.map((g) => g.name)
+    const orderedNames = [
+      ...CATEGORY_ORDER.filter((c) => present.includes(c as string)),
+      ...present.filter((n) => !(CATEGORY_ORDER as readonly string[]).includes(n)),
+    ]
+    const byName = new Map(arr.map((g) => [g.name, g] as const))
+    return orderedNames.map((name) => byName.get(name)!).filter(Boolean)
   }
 
-  const groupedDefault = useMemo(() => groupByCategory(lists.default), [lists.default])
-  const groupedPacked = useMemo(() => groupByCategory(lists.packed), [lists.packed])
-  const groupedNotNeeded = useMemo(() => groupByCategory(lists.notNeeded), [lists.notNeeded])
+  const orderedGroups = useMemo(() => groupOrder(groups), [groups])
 
-  const orderedCategories = (m: Map<string, Item[]>) => {
-    const present = Array.from(m.keys())
-    const ordered = CATEGORY_ORDER.filter((c) => present.includes(c as string)) as string[]
-    const others = present.filter((c) => !CATEGORY_ORDER.includes(c as any))
-    return [...ordered, ...others]
-  }
-
-  const orderedDefaultCategories = useMemo(() => orderedCategories(groupedDefault), [groupedDefault])
-  const orderedPackedCategories = useMemo(() => orderedCategories(groupedPacked), [groupedPacked])
-  const orderedNotNeededCategories = useMemo(() => orderedCategories(groupedNotNeeded), [groupedNotNeeded])
-
+  // Persist nodes
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes))
     } catch {}
-  }, [items])
-
-  // Persist group statuses
-  useEffect(() => {
-    try {
-      localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(groupStatus))
-    } catch {}
-  }, [groupStatus])
-
-  // Ensure groupStatus covers all categories present in items
-  useEffect(() => {
-    const cats = Array.from(new Set(items.map((i) => i.category ?? categorize(i.name))))
-    setGroupStatusMap((prev) => {
-      let changed = false
-      const next: GroupStatusMap = { ...prev }
-      for (const c of cats) {
-        if (!(c in next)) {
-          next[c] = 'default'
-          changed = true
-        }
-      }
-      // Remove categories no longer present
-      for (const k of Object.keys(next)) {
-        if (!cats.includes(k)) {
-          delete next[k]
-          changed = true
-        }
-      }
-      return changed ? next : prev
-    })
-  }, [items])
+  }, [nodes])
 
   const setStatus = (id: string, status: ItemStatus) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)))
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, status } : n)))
   }
 
-  const setGroupStatus = (category: string, status: ItemStatus) => {
-    // Update group’s own status and batch update items as before
-    setGroupStatusMap((prev) => ({ ...prev, [category]: status }))
-    setItems((prev) =>
-      prev.map((it) => ((it.category ?? categorize(it.name)) === category ? { ...it, status } : it))
-    )
+  const setGroupStatus = (groupId: string, status: ItemStatus) => {
+    setNodes((prev) => prev.map((n) => (n.id === groupId || n.parentId === groupId ? { ...n, status } : n)))
   }
 
-  const restoreGroup = (category: string) => {
-    setGroupStatusMap((prev) => ({ ...prev, [category]: 'default' }))
+  const restoreGroup = (groupId: string) => {
+    setNodes((prev) => prev.map((n) => (n.id === groupId ? { ...n, status: 'default' } : n)))
   }
 
   const restore = (id: string) => {
-    setItems((prev) => {
-      const target = prev.find((i) => i.id === id)
+    setNodes((prev) => {
+      const target = prev.find((n) => n.id === id)
       if (!target) return prev
-      const cat = target.category ?? categorize(target.name)
-      const hadDefaultInGroup = prev.some(
-        (i) => (i.category ?? categorize(i.name)) === cat && i.status === 'default'
-      )
-      // If there were no default items in this group before restore, also restore the group itself
-      if (!hadDefaultInGroup) {
-        setGroupStatusMap((gs) => ({ ...gs, [cat]: 'default' }))
+      if (target.parentId === null) {
+        // Group restore only resets the group itself
+        return prev.map((n) => (n.id === id ? { ...n, status: 'default' } : n))
       }
-      return prev.map((it) => (it.id === id ? { ...it, status: 'default' as ItemStatus } : it))
+      const parentId = target.parentId
+      const next = prev.map((n) => (n.id === id ? { ...n, status: 'default' as ItemStatus } : n))
+      const parent = prev.find((n) => n.id === parentId)
+      if (parent && parent.status !== 'default') {
+        // Ensure parent appears in To pack when restoring a child
+        return next.map((n) => (n.id === parentId ? { ...n, status: 'default' } : n))
+      }
+      return next
     })
   }
 
@@ -269,20 +286,23 @@ function App() {
   }
 
   const resetAll = () => {
-    const initial = initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' as ItemStatus, category: categorize(name) }))
     // Optional confirmation to prevent accidental reset
     if (window.confirm('Reset all items to the initial state?')) {
-      setItems(initial)
-      // Reset group statuses to defaults for the initial categories
-      const cats = Array.from(new Set(initial.map((i) => i.category ?? categorize(i.name))))
-      const map: GroupStatusMap = {}
-      for (const c of cats) map[c] = 'default'
-      setGroupStatusMap(map)
+      const cats = Array.from(new Set(initialNames.map((n) => categorize(n))))
+      const result: Node[] = []
+      const groupIdByCat = new Map<string, string>()
+      for (const c of cats) {
+        const gid = `g:${c}`
+        groupIdByCat.set(c, gid)
+        result.push({ id: gid, name: c, status: 'default', parentId: null })
+      }
+      initialNames.forEach((name, i) => {
+        const cat = categorize(name)
+        result.push({ id: `i:${i + 1}`, name, status: 'default', parentId: groupIdByCat.get(cat)! })
+      })
+      setNodes(result)
       try {
-        // Not strictly required since useEffect will persist the new state,
-        // but this ensures we drop any corrupted value if present.
         localStorage.removeItem(STORAGE_KEY)
-        localStorage.removeItem(GROUP_STORAGE_KEY)
       } catch {}
     }
   }
@@ -312,87 +332,94 @@ function App() {
       <main className="columns">
         <section className="column">
           <h2>To pack</h2>
-          {lists.default.length === 0 && (
+          {leavesByStatus.default.length === 0 && (
             <p className="empty">Nothing left here. Nice!</p>
           )}
-          {orderedDefaultCategories.map((cat) => (
-            <div key={cat} className="group">
-              {/* Group row visually similar to an item, only indentation differs */}
-              {(groupStatus[cat] ?? 'default') === 'default' && (
+          {orderedGroups
+            .filter((g) => g.status === 'default')
+            .map((g) => (
+              <div key={g.id} className="group">
+                {/* Group row visually similar to an item, only indentation differs */}
                 <div className="item indent-0">
-                  <span className="title">{cat}</span>
+                  <span className="title">{g.name}</span>
                   <div className="actions">
                     <button
                       className="btn small"
-                      onClick={() => setGroupStatus(cat, 'packed')}
-                      aria-label={`Mark all items in ${cat} as packed`}
+                      onClick={() => setGroupStatus(g.id, 'packed')}
+                      aria-label={`Mark all items in ${g.name} as packed`}
                       disabled={!!animating}
                     >
                       Packed
                     </button>
                     <button
                       className="btn small ghost"
-                      onClick={() => setGroupStatus(cat, 'not-needed')}
-                      aria-label={`Mark all items in ${cat} as not needed`}
+                      onClick={() => setGroupStatus(g.id, 'not-needed')}
+                      aria-label={`Mark all items in ${g.name} as not needed`}
                       disabled={!!animating}
                     >
                       Not needed
                     </button>
                   </div>
                 </div>
-              )}
-              <ul className="items">
-                {groupedDefault.get(cat)!.map((item) => {
-                  const isAnimating = animating?.id === item.id
-                  const animClass = isAnimating
-                    ? animating!.type === 'packed'
-                      ? 'anim-packed'
-                      : 'anim-notneeded'
-                    : ''
-                  return (
-                    <li key={item.id} className={`item ${animClass} indent-1`}>
-                      <span className="title">{item.name}</span>
-                      <div className="actions">
-                        <button
-                          className="btn small"
-                          onClick={() => markWithAnimation(item.id, 'packed')}
-                          aria-label={`Mark ${item.name} as packed`}
-                          disabled={isAnimating}
-                        >
-                          Packed
-                        </button>
-                        <button
-                          className="btn small ghost"
-                          onClick={() => markWithAnimation(item.id, 'not-needed')}
-                          aria-label={`Mark ${item.name} as not needed`}
-                          disabled={isAnimating}
-                        >
-                          Not needed
-                        </button>
-                      </div>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-          ))}
+                <ul className="items">
+                  {(childrenByGroup.get(g.id) ?? [])
+                    .filter((item) => item.status === 'default')
+                    .map((item) => {
+                      const isAnimating = animating?.id === item.id
+                      const animClass = isAnimating
+                        ? animating!.type === 'packed'
+                          ? 'anim-packed'
+                          : 'anim-notneeded'
+                        : ''
+                      return (
+                        <li key={item.id} className={`item ${animClass} indent-1`}>
+                          <span className="title">{item.name}</span>
+                          <div className="actions">
+                            <button
+                              className="btn small"
+                              onClick={() => markWithAnimation(item.id, 'packed')}
+                              aria-label={`Mark ${item.name} as packed`}
+                              disabled={isAnimating}
+                            >
+                              Packed
+                            </button>
+                            <button
+                              className="btn small ghost"
+                              onClick={() => markWithAnimation(item.id, 'not-needed')}
+                              aria-label={`Mark ${item.name} as not needed`}
+                              disabled={isAnimating}
+                            >
+                              Not needed
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                </ul>
+              </div>
+            ))}
         </section>
 
         <section className="column">
           <h2>Packed</h2>
-          {lists.packed.length === 0 && <p className="empty">No items packed yet.</p>}
-          {orderedPackedCategories.map((cat) => (
-            <div key={cat} className="group">
-              {(groupStatus[cat] ?? 'default') === 'packed' && (
+          {leavesByStatus.packed.length === 0 && <p className="empty">No items packed yet.</p>}
+          {orderedGroups.map((g) => {
+            const children = childrenByGroup.get(g.id) ?? []
+            const anyPacked = children.some((c) => c.status === 'packed')
+            const showGroup = g.status === 'packed' || anyPacked
+            if (!showGroup) return null
+            const hasDefaultChildren = children.some((c) => c.status === 'default')
+            return (
+              <div key={g.id} className="group">
                 <ul className="items">
                   <li className="item crossed indent-0">
-                    <span className="title">{cat}</span>
+                    <span className="title">{g.name}</span>
                     <div className="actions">
-                      {(groupedDefault.get(cat)?.length ?? 0) === 0 && (
+                      {g.status === 'packed' && !hasDefaultChildren && (
                         <button
                           className="btn small ghost"
-                          onClick={() => restoreGroup(cat)}
-                          aria-label={`Move ${cat} back to default`}
+                          onClick={() => restoreGroup(g.id)}
+                          aria-label={`Move ${g.name} back to default`}
                         >
                           Restore
                         </button>
@@ -400,44 +427,51 @@ function App() {
                     </div>
                   </li>
                 </ul>
-              )}
-              <ul className="items">
-                {groupedPacked.get(cat)!.map((item) => (
-                  <li key={item.id} className="item crossed indent-1">
-                    <span className="title">{item.name}</span>
-                    <div className="actions">
-                      <button
-                        className="btn small ghost"
-                        onClick={() => restore(item.id)}
-                        aria-label={`Move ${item.name} back to default`}
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                <ul className="items">
+                  {children
+                    .filter((item) => item.status === 'packed')
+                    .map((item) => (
+                      <li key={item.id} className="item crossed indent-1">
+                        <span className="title">{item.name}</span>
+                        <div className="actions">
+                          <button
+                            className="btn small ghost"
+                            onClick={() => restore(item.id)}
+                            aria-label={`Move ${item.name} back to default`}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )
+          })}
         </section>
 
         <section className="column">
           <h2>Not needed</h2>
-          {lists.notNeeded.length === 0 && (
+          {leavesByStatus.notNeeded.length === 0 && (
             <p className="empty">Everything might be useful!</p>
           )}
-          {orderedNotNeededCategories.map((cat) => (
-            <div key={cat} className="group">
-              {(groupStatus[cat] ?? 'default') === 'not-needed' && (
+          {orderedGroups.map((g) => {
+            const children = childrenByGroup.get(g.id) ?? []
+            const anyNN = children.some((c) => c.status === 'not-needed')
+            const showGroup = g.status === 'not-needed' || anyNN
+            if (!showGroup) return null
+            const hasDefaultChildren = children.some((c) => c.status === 'default')
+            return (
+              <div key={g.id} className="group">
                 <ul className="items">
                   <li className="item crossed dim indent-0">
-                    <span className="title">{cat}</span>
+                    <span className="title">{g.name}</span>
                     <div className="actions">
-                      {(groupedDefault.get(cat)?.length ?? 0) === 0 && (
+                      {g.status === 'not-needed' && !hasDefaultChildren && (
                         <button
                           className="btn small ghost"
-                          onClick={() => restoreGroup(cat)}
-                          aria-label={`Move ${cat} back to default`}
+                          onClick={() => restoreGroup(g.id)}
+                          aria-label={`Move ${g.name} back to default`}
                         >
                           Restore
                         </button>
@@ -445,25 +479,27 @@ function App() {
                     </div>
                   </li>
                 </ul>
-              )}
-              <ul className="items">
-                {groupedNotNeeded.get(cat)!.map((item) => (
-                  <li key={item.id} className="item crossed dim indent-1">
-                    <span className="title">{item.name}</span>
-                    <div className="actions">
-                      <button
-                        className="btn small ghost"
-                        onClick={() => restore(item.id)}
-                        aria-label={`Move ${item.name} back to default`}
-                      >
-                        Restore
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                <ul className="items">
+                  {children
+                    .filter((item) => item.status === 'not-needed')
+                    .map((item) => (
+                      <li key={item.id} className="item crossed dim indent-1">
+                        <span className="title">{item.name}</span>
+                        <div className="actions">
+                          <button
+                            className="btn small ghost"
+                            onClick={() => restore(item.id)}
+                            aria-label={`Move ${item.name} back to default`}
+                          >
+                            Restore
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            )
+          })}
         </section>
       </main>
     </div>
