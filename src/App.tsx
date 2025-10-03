@@ -14,27 +14,6 @@ type Node = {
 const STORAGE_KEY = 'packman.nodes.v2'
 // GROUP_STORAGE_KEY is no longer used; group state is part of Node now
 
-const CATEGORY_ORDER = ['Essentials', 'Electronics', 'Toiletries', 'Clothes', 'Accessories', 'Food', 'Other'] as const
-
-function categorize(name: string): string {
-  const n = name.toLowerCase()
-  if (['passport/id', 'boarding pass', 'wallet'].some((k) => n.includes(k))) return 'Essentials'
-  if (
-    ['phone', 'charger', 'laptop', 'tablet', 'headphones', 'adapter'].some((k) => n.includes(k))
-  )
-    return 'Electronics'
-  if (['toothbrush', 'toothpaste', 'deodorant', 'medication', 'medications'].some((k) => n.includes(k)))
-    return 'Toiletries'
-  if (
-    ['socks', 'underwear', 't-shirts', 't-shirt', 'pants', 'shorts', 'jacket', 'sweater', 'shoes'].some((k) =>
-      n.includes(k)
-    )
-  )
-    return 'Clothes'
-  if (['sunglasses', 'water bottle'].some((k) => n.includes(k))) return 'Accessories'
-  if (['snack', 'snacks'].some((k) => n.includes(k))) return 'Food'
-  return 'Other'
-}
 
 
 function parseUserList(text: string): { items: { name: string; status: ItemStatus; category?: string }[] } {
@@ -64,7 +43,7 @@ function parseUserList(text: string): { items: { name: string; status: ItemStatu
 
 // Build Node[] from parsed items (used by import, default initialization, and reset)
 function buildNodesFromParsed(items: { name: string; status: ItemStatus; category?: string }[]): Node[] {
-  const cats = Array.from(new Set(items.map((it) => it.category ?? categorize(it.name))))
+  const cats = Array.from(new Set(items.map((it) => it.category ?? 'Other')))
   const groupIdByCat = new Map<string, string>()
   const nodes: Node[] = []
   for (const c of cats) {
@@ -73,7 +52,7 @@ function buildNodesFromParsed(items: { name: string; status: ItemStatus; categor
     nodes.push({ id: gid, name: c, status: 'default', parentId: null })
   }
   items.forEach((it, i) => {
-    const cat = it.category ?? categorize(it.name)
+    const cat = it.category ?? 'Other'
     nodes.push({ id: `i:${i + 1}`, name: it.name, status: 'default', parentId: groupIdByCat.get(cat)! })
   })
   return nodes
@@ -128,7 +107,7 @@ function App() {
               }
             })()
             const cats = Array.from(
-              new Set(legacyItems.map((i) => i.category ?? categorize(i.name)))
+              new Set(legacyItems.map((i) => i.category ?? 'Other'))
             )
             const groupIdByCat = new Map<string, string>()
             const result: Node[] = []
@@ -138,7 +117,7 @@ function App() {
               result.push({ id: gid, name: c, status: legacyGroupStatus[c] ?? 'default', parentId: null })
             }
             legacyItems.forEach((it, idx) => {
-              const cat = it.category ?? categorize(it.name)
+              const cat = it.category ?? 'Other'
               const gid = groupIdByCat.get(cat)!
               result.push({ id: `i:${idx + 1}`, name: it.name, status: it.status, parentId: gid })
             })
@@ -210,17 +189,8 @@ function App() {
     }
   }, [nodes])
 
-  const groupOrder = (arr: Node[]) => {
-    const present = arr.map((g) => g.name)
-    const orderedNames = [
-      ...CATEGORY_ORDER.filter((c) => present.includes(c as string)),
-      ...present.filter((n) => !(CATEGORY_ORDER as readonly string[]).includes(n)),
-    ]
-    const byName = new Map(arr.map((g) => [g.name, g] as const))
-    return orderedNames.map((name) => byName.get(name)!).filter(Boolean)
-  }
-
-  const orderedGroups = useMemo(() => groupOrder(groups), [groups])
+  // Use groups in their natural order as defined by the source list (default or imported)
+  const orderedGroups = groups
 
   // Persist nodes
   useEffect(() => {
