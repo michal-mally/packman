@@ -7,9 +7,32 @@ type Item = {
   id: string
   name: string
   status: ItemStatus
+  category?: string
 }
 
 const STORAGE_KEY = 'packman.items.v1'
+
+const CATEGORY_ORDER = ['Essentials', 'Electronics', 'Toiletries', 'Clothes', 'Accessories', 'Food', 'Other'] as const
+
+function categorize(name: string): string {
+  const n = name.toLowerCase()
+  if (['passport/id', 'boarding pass', 'wallet'].some((k) => n.includes(k))) return 'Essentials'
+  if (
+    ['phone', 'charger', 'laptop', 'tablet', 'headphones', 'adapter'].some((k) => n.includes(k))
+  )
+    return 'Electronics'
+  if (['toothbrush', 'toothpaste', 'deodorant', 'medication', 'medications'].some((k) => n.includes(k)))
+    return 'Toiletries'
+  if (
+    ['socks', 'underwear', 't-shirts', 't-shirt', 'pants', 'shorts', 'jacket', 'sweater', 'shoes'].some((k) =>
+      n.includes(k)
+    )
+  )
+    return 'Clothes'
+  if (['sunglasses', 'water bottle'].some((k) => n.includes(k))) return 'Accessories'
+  if (['snack', 'snacks'].some((k) => n.includes(k))) return 'Food'
+  return 'Other'
+}
 
 const initialNames = [
   'Passport/ID',
@@ -45,11 +68,16 @@ function App() {
             (it: any) =>
               it && typeof it.id === 'string' && typeof it.name === 'string' && okStatuses.includes(it.status)
           )
-          if (valid) return parsed as Item[]
+          if (valid)
+            return (parsed as Item[]).map((it, idx) => ({
+              ...it,
+              id: typeof it.id === 'string' ? it.id : String(idx + 1),
+              category: it.category ?? categorize(it.name),
+            }))
         }
       }
     } catch {}
-    return initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' }))
+    return initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default', category: categorize(name) }))
   })
 
   const lists = useMemo(() => {
@@ -59,6 +87,24 @@ function App() {
       notNeeded: items.filter((i) => i.status === 'not-needed'),
     }
   }, [items])
+
+  const groupedDefault = useMemo(() => {
+    const m = new Map<string, Item[]>()
+    for (const it of lists.default) {
+      const cat = it.category ?? categorize(it.name)
+      const arr = m.get(cat) ?? []
+      arr.push(it)
+      m.set(cat, arr)
+    }
+    return m
+  }, [lists.default])
+
+  const orderedDefaultCategories = useMemo(() => {
+    const present = Array.from(groupedDefault.keys())
+    const ordered = CATEGORY_ORDER.filter((c) => present.includes(c as string)) as string[]
+    const others = present.filter((c) => !CATEGORY_ORDER.includes(c as any))
+    return [...ordered, ...others]
+  }, [groupedDefault])
 
   useEffect(() => {
     try {
@@ -73,7 +119,7 @@ function App() {
   const restore = (id: string) => setStatus(id, 'default')
 
   const resetAll = () => {
-    const initial = initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' as ItemStatus }))
+    const initial = initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' as ItemStatus, category: categorize(name) }))
     // Optional confirmation to prevent accidental reset
     if (window.confirm('Reset all items to the initial state?')) {
       setItems(initial)
@@ -101,29 +147,34 @@ function App() {
           {lists.default.length === 0 && (
             <p className="empty">Nothing left here. Nice!</p>
           )}
-          <ul className="items">
-            {lists.default.map((item) => (
-              <li key={item.id} className="item">
-                <span className="title">{item.name}</span>
-                <div className="actions">
-                  <button
-                    className="btn small"
-                    onClick={() => setStatus(item.id, 'packed')}
-                    aria-label={`Mark ${item.name} as packed`}
-                  >
-                    Packed
-                  </button>
-                  <button
-                    className="btn small ghost"
-                    onClick={() => setStatus(item.id, 'not-needed')}
-                    aria-label={`Mark ${item.name} as not needed`}
-                  >
-                    Not needed
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {orderedDefaultCategories.map((cat) => (
+            <div key={cat} className="group">
+              <h3 className="group-title">{cat}</h3>
+              <ul className="items">
+                {groupedDefault.get(cat)!.map((item) => (
+                  <li key={item.id} className="item">
+                    <span className="title">{item.name}</span>
+                    <div className="actions">
+                      <button
+                        className="btn small"
+                        onClick={() => setStatus(item.id, 'packed')}
+                        aria-label={`Mark ${item.name} as packed`}
+                      >
+                        Packed
+                      </button>
+                      <button
+                        className="btn small ghost"
+                        onClick={() => setStatus(item.id, 'not-needed')}
+                        aria-label={`Mark ${item.name} as not needed`}
+                      >
+                        Not needed
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
 
         <section className="column">
