@@ -334,11 +334,8 @@ function App() {
           toPackCount={toPackCount}
           luggageSvg={luggageSvg}
           animating={animating}
-          indentClass={indentClass}
-          setGroupStatus={setGroupStatus}
-          markWithAnimation={markWithAnimation}
-          restore={restore}
-          restoreGroup={restoreGroup}
+          setAnimating={setAnimating}
+          setNodes={setNodes}
         />
 
         <ListSection
@@ -348,11 +345,8 @@ function App() {
           idsWithChildren={idsWithChildren}
           packedLeavesCount={leavesByStatus.packed.length}
           animating={animating}
-          indentClass={indentClass}
-          setGroupStatus={setGroupStatus}
-          markWithAnimation={markWithAnimation}
-          restore={restore}
-          restoreGroup={restoreGroup}
+          setAnimating={setAnimating}
+          setNodes={setNodes}
         />
 
         <ListSection
@@ -362,11 +356,8 @@ function App() {
           idsWithChildren={idsWithChildren}
           notNeededLeavesCount={leavesByStatus.notNeeded.length}
           animating={animating}
-          indentClass={indentClass}
-          setGroupStatus={setGroupStatus}
-          markWithAnimation={markWithAnimation}
-          restore={restore}
-          restoreGroup={restoreGroup}
+          setAnimating={setAnimating}
+          setNodes={setNodes}
         />
       </main>
 

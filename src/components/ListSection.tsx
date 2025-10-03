@@ -15,11 +15,8 @@ export type ListSectionProps = {
   luggageSvg?: string
   // interaction/animation helpers
   animating: { id: string; type: 'packed' | 'not-needed' } | null
-  indentClass: (depth: number) => string
-  setGroupStatus: (groupId: string, status: ItemStatus) => void
-  markWithAnimation: (id: string, type: 'packed' | 'not-needed') => void
-  restore: (id: string) => void
-  restoreGroup: (groupId: string) => void
+  setAnimating: React.Dispatch<React.SetStateAction<{ id: string; type: 'packed' | 'not-needed' } | null>>
+  setNodes: React.Dispatch<React.SetStateAction<Node[]>>
 }
 
 export default function ListSection(props: ListSectionProps) {
@@ -33,12 +30,69 @@ export default function ListSection(props: ListSectionProps) {
     notNeededLeavesCount = 0,
     luggageSvg,
     animating,
-    indentClass,
-    setGroupStatus,
-    markWithAnimation,
-    restore,
-    restoreGroup,
+    setAnimating,
+    setNodes,
   } = props
+
+  // Local helpers (identical across lists)
+  const indentClass = (depth: number) => `indent-${Math.min(depth, 4)}`
+
+  const setStatus = (id: string, status: ItemStatus) => {
+    setNodes((prev) => prev.map((n) => (n.id === id ? { ...n, status } : n)))
+  }
+
+  const setGroupStatus = (groupId: string, status: ItemStatus) => {
+    setNodes((prev) => {
+      const map = new Map<string, string[]>()
+      for (const n of prev) {
+        if (n.parentId) {
+          const arr = map.get(n.parentId) ?? []
+          arr.push(n.id)
+          map.set(n.parentId, arr)
+        }
+      }
+      const collect = (id: string, acc: Set<string>) => {
+        acc.add(id)
+        const kids = map.get(id) ?? []
+        for (const k of kids) collect(k, acc)
+      }
+      const all = new Set<string>()
+      collect(groupId, all)
+      return prev.map((n) => (all.has(n.id) ? { ...n, status } : n))
+    })
+  }
+
+  const restoreGroup = (groupId: string) => {
+    setNodes((prev) => prev.map((n) => (n.id === groupId ? { ...n, status: 'default' } : n)))
+  }
+
+  const restore = (id: string) => {
+    setNodes((prev) => {
+      const byId = new Map(prev.map((n) => [n.id, n] as const))
+      const target = byId.get(id)
+      if (!target) return prev
+      let next = prev.map((n) => (n.id === id ? { ...n, status: 'default' as ItemStatus } : n))
+      let p = target.parentId
+      while (p) {
+        const parent = byId.get(p)
+        if (!parent) break
+        if (parent.status !== 'default') {
+          next = next.map((n) => (n.id === p ? { ...n, status: 'default' } : n))
+        }
+        p = parent.parentId
+      }
+      return next
+    })
+  }
+
+  const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
+    if (animating) return
+    setAnimating({ id, type })
+    window.setTimeout(() => {
+      setStatus(id, type)
+      setAnimating(null)
+    }, 350)
+  }
 
   const hasDescendantWithStatus = (id: string, status: ItemStatus): boolean => {
     const stack = [id]
