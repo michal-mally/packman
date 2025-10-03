@@ -143,23 +143,31 @@ function App() {
     }
   }, [items])
 
-  const groupedDefault = useMemo(() => {
+  const groupByCategory = (arr: Item[]) => {
     const m = new Map<string, Item[]>()
-    for (const it of lists.default) {
+    for (const it of arr) {
       const cat = it.category ?? categorize(it.name)
-      const arr = m.get(cat) ?? []
-      arr.push(it)
-      m.set(cat, arr)
+      const list = m.get(cat) ?? []
+      list.push(it)
+      m.set(cat, list)
     }
     return m
-  }, [lists.default])
+  }
 
-  const orderedDefaultCategories = useMemo(() => {
-    const present = Array.from(groupedDefault.keys())
+  const groupedDefault = useMemo(() => groupByCategory(lists.default), [lists.default])
+  const groupedPacked = useMemo(() => groupByCategory(lists.packed), [lists.packed])
+  const groupedNotNeeded = useMemo(() => groupByCategory(lists.notNeeded), [lists.notNeeded])
+
+  const orderedCategories = (m: Map<string, Item[]>) => {
+    const present = Array.from(m.keys())
     const ordered = CATEGORY_ORDER.filter((c) => present.includes(c as string)) as string[]
     const others = present.filter((c) => !CATEGORY_ORDER.includes(c as any))
     return [...ordered, ...others]
-  }, [groupedDefault])
+  }
+
+  const orderedDefaultCategories = useMemo(() => orderedCategories(groupedDefault), [groupedDefault])
+  const orderedPackedCategories = useMemo(() => orderedCategories(groupedPacked), [groupedPacked])
+  const orderedNotNeededCategories = useMemo(() => orderedCategories(groupedNotNeeded), [groupedNotNeeded])
 
   useEffect(() => {
     try {
@@ -169,6 +177,10 @@ function App() {
 
   const setStatus = (id: string, status: ItemStatus) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)))
+  }
+
+  const setGroupStatus = (category: string, status: ItemStatus) => {
+    setItems((prev) => prev.map((it) => ( (it.category ?? categorize(it.name)) === category ? { ...it, status } : it)))
   }
 
   const restore = (id: string) => setStatus(id, 'default')
@@ -228,6 +240,24 @@ function App() {
           {orderedDefaultCategories.map((cat) => (
             <div key={cat} className="group">
               <h3 className="group-title">{cat}</h3>
+              <div className="actions" style={{ margin: '0.25rem 0' }}>
+                <button
+                  className="btn small"
+                  onClick={() => setGroupStatus(cat, 'packed')}
+                  aria-label={`Mark all items in ${cat} as packed`}
+                  disabled={!!animating}
+                >
+                  Packed
+                </button>
+                <button
+                  className="btn small ghost"
+                  onClick={() => setGroupStatus(cat, 'not-needed')}
+                  aria-label={`Mark all items in ${cat} as not needed`}
+                  disabled={!!animating}
+                >
+                  Not needed
+                </button>
+              </div>
               <ul className="items">
                 {groupedDefault.get(cat)!.map((item) => {
                   const isAnimating = animating?.id === item.id
@@ -268,22 +298,27 @@ function App() {
         <section className="column">
           <h2>Packed</h2>
           {lists.packed.length === 0 && <p className="empty">No items packed yet.</p>}
-          <ul className="items">
-            {lists.packed.map((item) => (
-              <li key={item.id} className="item crossed">
-                <span className="title">{item.name}</span>
-                <div className="actions">
-                  <button
-                    className="btn small ghost"
-                    onClick={() => restore(item.id)}
-                    aria-label={`Move ${item.name} back to default`}
-                  >
-                    Restore
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {orderedPackedCategories.map((cat) => (
+            <div key={cat} className="group">
+              <h3 className="group-title">{cat}</h3>
+              <ul className="items">
+                {groupedPacked.get(cat)!.map((item) => (
+                  <li key={item.id} className="item crossed">
+                    <span className="title">{item.name}</span>
+                    <div className="actions">
+                      <button
+                        className="btn small ghost"
+                        onClick={() => restore(item.id)}
+                        aria-label={`Move ${item.name} back to default`}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
 
         <section className="column">
@@ -291,22 +326,27 @@ function App() {
           {lists.notNeeded.length === 0 && (
             <p className="empty">Everything might be useful!</p>
           )}
-          <ul className="items">
-            {lists.notNeeded.map((item) => (
-              <li key={item.id} className="item crossed dim">
-                <span className="title">{item.name}</span>
-                <div className="actions">
-                  <button
-                    className="btn small ghost"
-                    onClick={() => restore(item.id)}
-                    aria-label={`Move ${item.name} back to default`}
-                  >
-                    Restore
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
+          {orderedNotNeededCategories.map((cat) => (
+            <div key={cat} className="group">
+              <h3 className="group-title">{cat}</h3>
+              <ul className="items">
+                {groupedNotNeeded.get(cat)!.map((item) => (
+                  <li key={item.id} className="item crossed dim">
+                    <span className="title">{item.name}</span>
+                    <div className="actions">
+                      <button
+                        className="btn small ghost"
+                        onClick={() => restore(item.id)}
+                        aria-label={`Move ${item.name} back to default`}
+                      >
+                        Restore
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
         </section>
       </main>
     </div>
