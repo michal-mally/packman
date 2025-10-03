@@ -1,5 +1,5 @@
 #root {
-  max-width: 980px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 2rem 1rem;
 }
@@ -29,6 +29,14 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 1rem;
+}
+
+/* Prefer wider lists; only split into columns on very wide screens */
+@media (min-width: 1100px) {
+  .columns { grid-template-columns: 1fr 1fr; }
+}
+@media (min-width: 1600px) {
+  .columns { grid-template-columns: 1fr 1fr 1fr; }
 }
 
 .column h2 {
@@ -131,6 +139,38 @@
   border-color: rgba(0,0,0,0.2);
 }
 
+/* Brighter variants for better icon visibility */
+.btn.ghost.warn {
+  background: rgba(231, 76, 60, 0.12);
+  color: #b3362d;
+  border-color: rgba(231, 76, 60, 0.45);
+}
+.btn.ghost.warn:hover {
+  background: rgba(231, 76, 60, 0.18);
+}
+
+.btn.ghost.restore {
+  background: rgba(100, 108, 255, 0.12);
+  color: #2b2e5f;
+  border-color: rgba(100, 108, 255, 0.45);
+}
+.btn.ghost.restore:hover {
+  background: rgba(100, 108, 255, 0.18);
+}
+
+@media (prefers-color-scheme: dark) {
+  .btn.ghost.warn {
+    background: rgba(231, 76, 60, 0.28);
+    color: #ffd0cc;
+    border-color: rgba(231, 76, 60, 0.5);
+  }
+  .btn.ghost.restore {
+    background: rgba(100, 108, 255, 0.32);
+    color: #e6e9ff;
+    border-color: rgba(180, 188, 255, 0.5);
+  }
+}
+
 .btn.small {
   font-size: 0.85rem;
 }
@@ -154,6 +194,43 @@
   .columns {
     grid-template-columns: 1fr;
   }
+}
+
+/* Icon-capable buttons used in list actions */
+.btn.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.btn.icon-btn .icon {
+  width: 1.1em;
+  height: 1.1em;
+  display: inline-block;
+}
+.btn.icon-btn .btn-label {
+  display: inline;
+}
+
+/* On very small screens, prefer icon-only buttons for compactness */
+@media (max-width: 480px) {
+  .btn.icon-btn {
+    padding: 0.4rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    justify-content: center;
+  }
+  .btn.icon-btn .btn-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .actions { gap: 0.35rem; }
 }
 
 /* Action animations */

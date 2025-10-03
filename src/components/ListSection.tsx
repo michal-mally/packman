@@ -1,5 +1,8 @@
 import React from 'react'
 import type { ItemStatus, Node } from '../types'
+import checkIcon from '../assets/check.svg'
+import minusIcon from '../assets/minus.svg'
+import restoreIcon from '../assets/restore.svg'
 
 export type ListMode = 'to-pack' | 'packed' | 'not-needed'
 
@@ -133,11 +136,13 @@ export default function ListSection(props: ListSectionProps) {
               <div className={`item ${indentClass(depth)}`}>
                 <span className="title">{n.name}</span>
                 <div className="actions">
-                  <button className="btn small" onClick={() => setGroupStatus(n.id, 'packed')} disabled={!!animating}>
-                    Packed
+                  <button className="btn small icon-btn" onClick={() => setGroupStatus(n.id, 'packed')} disabled={!!animating} aria-label="Mark group as packed">
+                    <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
+                    <span className="btn-label">Packed</span>
                   </button>
-                  <button className="btn small ghost" onClick={() => setGroupStatus(n.id, 'not-needed')} disabled={!!animating}>
-                    Not needed
+                  <button className="btn small ghost warn icon-btn" onClick={() => setGroupStatus(n.id, 'not-needed')} disabled={!!animating} aria-label="Mark group as not needed">
+                    <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
+                    <span className="btn-label">Not needed</span>
                   </button>
                 </div>
               </div>
@@ -151,11 +156,13 @@ export default function ListSection(props: ListSectionProps) {
           <li key={n.id} className={`item ${animClass} ${indentClass(depth)}`}>
             <span className="title">{n.name}</span>
             <div className="actions">
-              <button className="btn small" onClick={() => markWithAnimation(n.id, 'packed')} disabled={isAnimating}>
-                Packed
+              <button className="btn small icon-btn" onClick={() => markWithAnimation(n.id, 'packed')} disabled={isAnimating} aria-label="Mark item as packed">
+                <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
+                <span className="btn-label">Packed</span>
               </button>
-              <button className="btn small ghost" onClick={() => markWithAnimation(n.id, 'not-needed')} disabled={isAnimating}>
-                Not needed
+              <button className="btn small ghost warn icon-btn" onClick={() => markWithAnimation(n.id, 'not-needed')} disabled={isAnimating} aria-label="Mark item as not needed">
+                <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
+                <span className="btn-label">Not needed</span>
               </button>
             </div>
           </li>
@@ -178,8 +185,9 @@ export default function ListSection(props: ListSectionProps) {
               <span className="title">{n.name}</span>
               <div className="actions">
                 {n.status === status && !hasDefaults && (
-                  <button className="btn small ghost" onClick={() => restoreGroup(n.id)}>
-                    Restore
+                  <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(n.id)} aria-label="Restore group to To pack">
+                    <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
+                    <span className="btn-label">Restore</span>
                   </button>
                 )}
               </div>
@@ -197,8 +205,9 @@ export default function ListSection(props: ListSectionProps) {
             <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
               <span className="title">{n.name}</span>
               <div className="actions">
-                <button className="btn small ghost" onClick={() => restore(n.id)}>
-                  Restore
+                <button className="btn small ghost restore icon-btn" onClick={() => restore(n.id)} aria-label="Restore item to To pack">
+                  <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
+                  <span className="btn-label">Restore</span>
                 </button>
               </div>
             </li>
@@ -227,11 +236,13 @@ export default function ListSection(props: ListSectionProps) {
                   <div className={`item ${indentClass(0)}`}>
                     <span className="title">{g.name}</span>
                     <div className="actions">
-                      <button className="btn small" onClick={() => setGroupStatus(g.id, 'packed')} disabled={!!animating}>
-                        Packed
+                      <button className="btn small icon-btn" onClick={() => setGroupStatus(g.id, 'packed')} disabled={!!animating} aria-label="Mark group as packed">
+                        <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
+                        <span className="btn-label">Packed</span>
                       </button>
-                      <button className="btn small ghost" onClick={() => setGroupStatus(g.id, 'not-needed')} disabled={!!animating}>
-                        Not needed
+                      <button className="btn small ghost warn icon-btn" onClick={() => setGroupStatus(g.id, 'not-needed')} disabled={!!animating} aria-label="Mark group as not needed">
+                        <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
+                        <span className="btn-label">Not needed</span>
                       </button>
                     </div>
                   </div>
@@ -266,8 +277,9 @@ export default function ListSection(props: ListSectionProps) {
                 <span className="title">{g.name}</span>
                 <div className="actions">
                   {g.status === status && !hasDefaults && (
-                    <button className="btn small ghost" onClick={() => restoreGroup(g.id)}>
-                      Restore
+                    <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(g.id)} aria-label="Restore group to To pack">
+                      <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
+                      <span className="btn-label">Restore</span>
                     </button>
                   )}
                 </div>
