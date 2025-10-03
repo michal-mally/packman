@@ -11,6 +11,9 @@ type Item = {
 }
 
 const STORAGE_KEY = 'packman.items.v1'
+const GROUP_STORAGE_KEY = 'packman.groups.v1'
+
+type GroupStatusMap = Record<string, ItemStatus>
 
 const CATEGORY_ORDER = ['Essentials', 'Electronics', 'Toiletries', 'Clothes', 'Accessories', 'Food', 'Other'] as const
 
@@ -108,6 +111,23 @@ function App() {
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
+  // Independent group (category) statuses: groups must be explicitly marked
+  const [groupStatus, setGroupStatusMap] = useState<GroupStatusMap>(() => {
+    try {
+      const raw = localStorage.getItem(GROUP_STORAGE_KEY)
+      if (raw) {
+        const obj = JSON.parse(raw)
+        if (obj && typeof obj === 'object') return obj as GroupStatusMap
+      }
+    } catch {}
+    const cats = Array.from(new Set(
+      (Array.isArray(items) ? items : []).map((i) => i.category ?? categorize(i.name))
+    ))
+    const map: GroupStatusMap = {}
+    for (const c of cats) map[c] = 'default'
+    return map
+  })
+
   const onClickImport = () => {
     fileInputRef.current?.click()
   }
@@ -175,15 +195,67 @@ function App() {
     } catch {}
   }, [items])
 
+  // Persist group statuses
+  useEffect(() => {
+    try {
+      localStorage.setItem(GROUP_STORAGE_KEY, JSON.stringify(groupStatus))
+    } catch {}
+  }, [groupStatus])
+
+  // Ensure groupStatus covers all categories present in items
+  useEffect(() => {
+    const cats = Array.from(new Set(items.map((i) => i.category ?? categorize(i.name))))
+    setGroupStatusMap((prev) => {
+      let changed = false
+      const next: GroupStatusMap = { ...prev }
+      for (const c of cats) {
+        if (!(c in next)) {
+          next[c] = 'default'
+          changed = true
+        }
+      }
+      // Remove categories no longer present
+      for (const k of Object.keys(next)) {
+        if (!cats.includes(k)) {
+          delete next[k]
+          changed = true
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [items])
+
   const setStatus = (id: string, status: ItemStatus) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, status } : it)))
   }
 
   const setGroupStatus = (category: string, status: ItemStatus) => {
-    setItems((prev) => prev.map((it) => ( (it.category ?? categorize(it.name)) === category ? { ...it, status } : it)))
+    // Update group’s own status and batch update items as before
+    setGroupStatusMap((prev) => ({ ...prev, [category]: status }))
+    setItems((prev) =>
+      prev.map((it) => ((it.category ?? categorize(it.name)) === category ? { ...it, status } : it))
+    )
   }
 
-  const restore = (id: string) => setStatus(id, 'default')
+  const restoreGroup = (category: string) => {
+    setGroupStatusMap((prev) => ({ ...prev, [category]: 'default' }))
+  }
+
+  const restore = (id: string) => {
+    setItems((prev) => {
+      const target = prev.find((i) => i.id === id)
+      if (!target) return prev
+      const cat = target.category ?? categorize(target.name)
+      const hadDefaultInGroup = prev.some(
+        (i) => (i.category ?? categorize(i.name)) === cat && i.status === 'default'
+      )
+      // If there were no default items in this group before restore, also restore the group itself
+      if (!hadDefaultInGroup) {
+        setGroupStatusMap((gs) => ({ ...gs, [cat]: 'default' }))
+      }
+      return prev.map((it) => (it.id === id ? { ...it, status: 'default' as ItemStatus } : it))
+    })
+  }
 
   const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
     // Prevent overlapping animations; keep UX simple
@@ -201,10 +273,16 @@ function App() {
     // Optional confirmation to prevent accidental reset
     if (window.confirm('Reset all items to the initial state?')) {
       setItems(initial)
+      // Reset group statuses to defaults for the initial categories
+      const cats = Array.from(new Set(initial.map((i) => i.category ?? categorize(i.name))))
+      const map: GroupStatusMap = {}
+      for (const c of cats) map[c] = 'default'
+      setGroupStatusMap(map)
       try {
         // Not strictly required since useEffect will persist the new state,
         // but this ensures we drop any corrupted value if present.
         localStorage.removeItem(STORAGE_KEY)
+        localStorage.removeItem(GROUP_STORAGE_KEY)
       } catch {}
     }
   }
@@ -239,25 +317,30 @@ function App() {
           )}
           {orderedDefaultCategories.map((cat) => (
             <div key={cat} className="group">
-              <h3 className="group-title">{cat}</h3>
-              <div className="actions" style={{ margin: '0.25rem 0' }}>
-                <button
-                  className="btn small"
-                  onClick={() => setGroupStatus(cat, 'packed')}
-                  aria-label={`Mark all items in ${cat} as packed`}
-                  disabled={!!animating}
-                >
-                  Packed
-                </button>
-                <button
-                  className="btn small ghost"
-                  onClick={() => setGroupStatus(cat, 'not-needed')}
-                  aria-label={`Mark all items in ${cat} as not needed`}
-                  disabled={!!animating}
-                >
-                  Not needed
-                </button>
-              </div>
+              {/* Group row visually similar to an item, only indentation differs */}
+              {(groupStatus[cat] ?? 'default') === 'default' && (
+                <div className="item indent-0">
+                  <span className="title">{cat}</span>
+                  <div className="actions">
+                    <button
+                      className="btn small"
+                      onClick={() => setGroupStatus(cat, 'packed')}
+                      aria-label={`Mark all items in ${cat} as packed`}
+                      disabled={!!animating}
+                    >
+                      Packed
+                    </button>
+                    <button
+                      className="btn small ghost"
+                      onClick={() => setGroupStatus(cat, 'not-needed')}
+                      aria-label={`Mark all items in ${cat} as not needed`}
+                      disabled={!!animating}
+                    >
+                      Not needed
+                    </button>
+                  </div>
+                </div>
+              )}
               <ul className="items">
                 {groupedDefault.get(cat)!.map((item) => {
                   const isAnimating = animating?.id === item.id
@@ -267,7 +350,7 @@ function App() {
                       : 'anim-notneeded'
                     : ''
                   return (
-                    <li key={item.id} className={`item ${animClass}`}>
+                    <li key={item.id} className={`item ${animClass} indent-1`}>
                       <span className="title">{item.name}</span>
                       <div className="actions">
                         <button
@@ -300,10 +383,27 @@ function App() {
           {lists.packed.length === 0 && <p className="empty">No items packed yet.</p>}
           {orderedPackedCategories.map((cat) => (
             <div key={cat} className="group">
-              <h3 className="group-title">{cat}</h3>
+              {(groupStatus[cat] ?? 'default') === 'packed' && (
+                <ul className="items">
+                  <li className="item crossed indent-0">
+                    <span className="title">{cat}</span>
+                    <div className="actions">
+                      {(groupedDefault.get(cat)?.length ?? 0) === 0 && (
+                        <button
+                          className="btn small ghost"
+                          onClick={() => restoreGroup(cat)}
+                          aria-label={`Move ${cat} back to default`}
+                        >
+                          Restore
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                </ul>
+              )}
               <ul className="items">
                 {groupedPacked.get(cat)!.map((item) => (
-                  <li key={item.id} className="item crossed">
+                  <li key={item.id} className="item crossed indent-1">
                     <span className="title">{item.name}</span>
                     <div className="actions">
                       <button
@@ -328,10 +428,27 @@ function App() {
           )}
           {orderedNotNeededCategories.map((cat) => (
             <div key={cat} className="group">
-              <h3 className="group-title">{cat}</h3>
+              {(groupStatus[cat] ?? 'default') === 'not-needed' && (
+                <ul className="items">
+                  <li className="item crossed dim indent-0">
+                    <span className="title">{cat}</span>
+                    <div className="actions">
+                      {(groupedDefault.get(cat)?.length ?? 0) === 0 && (
+                        <button
+                          className="btn small ghost"
+                          onClick={() => restoreGroup(cat)}
+                          aria-label={`Move ${cat} back to default`}
+                        >
+                          Restore
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                </ul>
+              )}
               <ul className="items">
                 {groupedNotNeeded.get(cat)!.map((item) => (
-                  <li key={item.id} className="item crossed dim">
+                  <li key={item.id} className="item crossed dim indent-1">
                     <span className="title">{item.name}</span>
                     <div className="actions">
                       <button

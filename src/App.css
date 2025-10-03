@@ -72,6 +72,14 @@
   gap: 0.5rem;
 }
 
+/* Indentation to visually differentiate groups from items */
+.item.indent-0 {
+  margin-left: 0;
+}
+.item.indent-1 {
+  margin-left: 1.25rem;
+}
+
 .btn {
   border: 1px solid transparent;
   background: #646cff;
