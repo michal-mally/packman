@@ -12,7 +12,8 @@ export type ListSectionProps = {
   toPackCount?: number
   packedLeavesCount?: number
   notNeededLeavesCount?: number
-  luggageSvg?: string
+  // custom empty state component to render when the section is empty
+  emptyComponent?: React.ReactNode
   // interaction/animation helpers
   animating: { id: string; type: 'packed' | 'not-needed' } | null
   setAnimating: React.Dispatch<React.SetStateAction<{ id: string; type: 'packed' | 'not-needed' } | null>>
@@ -28,7 +29,7 @@ export default function ListSection(props: ListSectionProps) {
     toPackCount = 0,
     packedLeavesCount = 0,
     notNeededLeavesCount = 0,
-    luggageSvg,
+    emptyComponent,
     animating,
     setAnimating,
     setNodes,
@@ -212,11 +213,7 @@ export default function ListSection(props: ListSectionProps) {
     return (
       <section className="column">
         {toPackCount === 0 ? (
-          <div className="empty-hero" aria-live="polite">
-            {luggageSvg && <div dangerouslySetInnerHTML={{ __html: luggageSvg }} />}
-            <h2 className="hero-title">All set! Your luggage is ready.</h2>
-            <p className="hero-subtitle">Nothing left to pack. Have a great trip!</p>
-          </div>
+          <>{emptyComponent}</>
         ) : (
           <>
             <h2>
@@ -255,9 +252,9 @@ export default function ListSection(props: ListSectionProps) {
     <section className="column">
       <h2>{status === 'packed' ? 'Packed' : 'Not needed'}</h2>
       {empty && (
-        <p className="empty">{status === 'packed' ? 'No items packed yet.' : 'Everything might be useful!'}</p>
+        <>{emptyComponent}</>
       )}
-      {orderedGroups.map((g) => {
+      {!empty && orderedGroups.map((g) => {
         const any = hasDescendantWithStatus(g.id, status)
         const showGroup = g.status === status || any
         if (!showGroup) return null

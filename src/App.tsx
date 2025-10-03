@@ -332,7 +332,13 @@ function App() {
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
           toPackCount={toPackCount}
-          luggageSvg={luggageSvg}
+          emptyComponent={(
+            <div className="empty-hero" aria-live="polite">
+              {luggageSvg && <div dangerouslySetInnerHTML={{ __html: luggageSvg }} />}
+              <h2 className="hero-title">All set! Your luggage is ready.</h2>
+              <p className="hero-subtitle">Nothing left to pack. Have a great trip!</p>
+            </div>
+          )}
           animating={animating}
           setAnimating={setAnimating}
           setNodes={setNodes}
@@ -344,6 +350,7 @@ function App() {
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
           packedLeavesCount={leavesByStatus.packed.length}
+          emptyComponent={<p className="empty">No items packed yet.</p>}
           animating={animating}
           setAnimating={setAnimating}
           setNodes={setNodes}
@@ -355,6 +362,7 @@ function App() {
           childrenByGroup={childrenByGroup}
           idsWithChildren={idsWithChildren}
           notNeededLeavesCount={leavesByStatus.notNeeded.length}
+          emptyComponent={<p className="empty">No items marked as not needed.</p>}
           animating={animating}
           setAnimating={setAnimating}
           setNodes={setNodes}
