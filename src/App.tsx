@@ -1,57 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
-import defaultListRaw from './default-list.txt?raw'
 import luggageSvg from './assets/luggage.svg?raw'
 import ConfirmModal from './components/ConfirmModal'
-
-export type ItemStatus = 'default' | 'packed' | 'not-needed'
-
-type Node = {
-  id: string
-  name: string
-  status: ItemStatus
-  parentId: string | null // null means this is a group (root-level item)
-}
+import ImportButton from './components/ImportButton'
+import { nodesFromText, defaultListText } from './lib/imports'
+import type { ItemStatus, Node } from './types'
 
 const STORAGE_KEY = 'packman.nodes.v2'
 // GROUP_STORAGE_KEY is no longer used; group state is part of Node now
-
-
-
-// Parse text with arbitrary nesting (2 spaces per level). Each non-empty line becomes a node.
-function nodesFromText(text: string): Node[] {
-  const lines = text.replace(/\r/g, '').split('\n')
-  const nodes: Node[] = []
-  // stack of node ids by depth
-  const stack: string[] = []
-  let seq = 0
-  for (const raw of lines) {
-    const line = raw.replace(/\s+$/g, '')
-    if (line.trim().length === 0) continue
-    const m = line.match(/^(\s*)/)
-    const indent = m ? m[1].length : 0
-    if (indent % 2 !== 0) {
-      // ignore invalid indentation
-      continue
-    }
-    const depth = indent / 2
-    const name = line.trim()
-    // shrink stack to current depth
-    while (stack.length > depth) stack.pop()
-    const parentId = depth === 0 ? null : stack[stack.length - 1] ?? null
-    const id = `n:${++seq}`
-    nodes.push({ id, name, status: 'default', parentId })
-    // push this node as current parent for deeper levels
-    stack.push(id)
-  }
-  return nodes
-}
-
-// Compose default list text in the same format as import feature (Group + 2-space indented items)
-function defaultListText(): string {
-  // Now sourced from a hardcoded text file in the same format as user input
-  return (defaultListRaw || '').replace(/\r/g, '').trim() + '\n'
-}
 
 function App() {
   const LEGACY_ITEMS_KEY = 'packman.items.v1'
@@ -121,35 +77,8 @@ function App() {
   })
 
   const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [showReset, setShowReset] = useState(false)
-  const [showImport, setShowImport] = useState(false)
-  const [pendingImport, setPendingImport] = useState<Node[] | null>(null)
 
-  const onClickImport = () => {
-    fileInputRef.current?.click()
-  }
-
-  const onFileSelected: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    const file = e.target.files?.[0]
-    // Reset input value so selecting the same file again re-triggers change
-    e.currentTarget.value = ''
-    if (!file) return
-    try {
-      const text = await file.text()
-      const parsedNodes = nodesFromText(text)
-      if (parsedNodes.length === 0) {
-        window.alert('No items found in the uploaded file. Use 2-space indentation to nest groups/items.')
-        return
-      }
-      // Use custom modal confirmation instead of native confirm
-      setPendingImport(parsedNodes)
-      setShowImport(true)
-    } catch (err) {
-      console.error(err)
-      window.alert('Failed to read the file. Please ensure it is a plain text (.txt) file.')
-    }
-  }
 
   // Derived structures
   const groups = useMemo(() => nodes.filter((n) => n.parentId === null), [nodes])
@@ -270,18 +199,6 @@ function App() {
 
     const cancelReset = () => setShowReset(false)
 
-    const confirmImport = () => {
-      if (pendingImport && pendingImport.length > 0) {
-        setNodes(pendingImport)
-      }
-      setPendingImport(null)
-      setShowImport(false)
-    }
-
-    const cancelImport = () => {
-      setPendingImport(null)
-      setShowImport(false)
-    }
 
     const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
     // Prevent overlapping animations; keep UX simple
@@ -422,19 +339,10 @@ function App() {
          <h1>Packman</h1>
          <p className="subtitle">A simple trip packing checklist</p>
          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-           <button className="btn small" onClick={onClickImport} aria-label="Import items list from a text file">
-             Import list
-           </button>
+           <ImportButton onImport={(newNodes) => setNodes(newNodes)} />
            <button className="btn small ghost" onClick={resetAll} aria-label="Reset all items to initial state">
              Reset
            </button>
-           <input
-             ref={fileInputRef}
-             type="file"
-             accept=".txt,text/plain"
-             onChange={onFileSelected}
-             style={{ display: 'none' }}
-           />
          </div>
        </header>
 
@@ -540,15 +448,6 @@ function App() {
         onConfirm={confirmReset}
       />
 
-      <ConfirmModal
-        open={showImport}
-        title="Import new list?"
-        message="Importing will replace your current list. You can still use Reset to go back to the default list."
-        confirmLabel="Import"
-        cancelLabel="Cancel"
-        onCancel={cancelImport}
-        onConfirm={confirmImport}
-      />
     </div>
   )
 }
