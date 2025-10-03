@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import defaultListRaw from './default-list.txt?raw'
 import luggageSvg from './assets/luggage.svg?raw'
+import ConfirmModal from './components/ConfirmModal'
 
 export type ItemStatus = 'default' | 'packed' | 'not-needed'
 
@@ -529,47 +530,25 @@ function App() {
         </section>
       </main>
 
-      {showReset && (
-        <div className="modal-backdrop" onClick={cancelReset}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="reset-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="reset-title" style={{ marginTop: 0 }}>Reset to default list?</h3>
-            <p style={{ marginTop: 0 }}>
-              This will remove your current items and restore the original default list. This action cannot be undone.
-            </p>
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={cancelReset}>Cancel</button>
-              <button className="btn" onClick={confirmReset}>Reset</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={showReset}
+        title="Reset to default list?"
+        message="This will remove your current items and restore the original default list. This action cannot be undone."
+        confirmLabel="Reset"
+        cancelLabel="Cancel"
+        onCancel={cancelReset}
+        onConfirm={confirmReset}
+      />
 
-      {showImport && (
-        <div className="modal-backdrop" onClick={cancelImport}>
-          <div
-            className="modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="import-title"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 id="import-title" style={{ marginTop: 0 }}>Import new list?</h3>
-            <p style={{ marginTop: 0 }}>
-              Importing will replace your current list. You can still use Reset to go back to the default list.
-            </p>
-            <div className="modal-actions">
-              <button className="btn ghost" onClick={cancelImport}>Cancel</button>
-              <button className="btn" onClick={confirmImport}>Import</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={showImport}
+        title="Import new list?"
+        message="Importing will replace your current list. You can still use Reset to go back to the default list."
+        confirmLabel="Import"
+        cancelLabel="Cancel"
+        onCancel={cancelImport}
+        onConfirm={confirmImport}
+      />
     </div>
   )
 }
