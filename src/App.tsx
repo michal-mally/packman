@@ -3,6 +3,7 @@ import './App.css'
 import luggageSvg from './assets/luggage.svg?raw'
 import ImportButton from './components/ImportButton'
 import ResetButton from './components/ResetButton'
+import ListSection from './components/ListSection'
 import { nodesFromText, defaultListText } from './lib/imports'
 import type { ItemStatus, Node } from './types'
 
@@ -325,95 +326,48 @@ function App() {
        </header>
 
       <main className="columns">
-        <section className="column">
-          {toPackCount === 0 ? (
-            <div className="empty-hero" aria-live="polite">
-              <div dangerouslySetInnerHTML={{ __html: luggageSvg }} />
-              <h2 className="hero-title">All set! Your luggage is ready.</h2>
-              <p className="hero-subtitle">Nothing left to pack. Have a great trip!</p>
-            </div>
-          ) : (
-            <>
-              <h2>To pack <span className="badge" aria-label={`To pack count: ${toPackCount}`}>{toPackCount}</span></h2>
-              {orderedGroups
-                .filter((g) => g.status === 'default')
-                .map((g) => (
-                  <div key={g.id} className="group">
-                    <div className={`item ${indentClass(0)}`}>
-                      <span className="title">{g.name}</span>
-                      <div className="actions">
-                        <button className="btn small" onClick={() => setGroupStatus(g.id, 'packed')} disabled={!!animating}>
-                          Packed
-                        </button>
-                        <button className="btn small ghost" onClick={() => setGroupStatus(g.id, 'not-needed')} disabled={!!animating}>
-                          Not needed
-                        </button>
-                      </div>
-                    </div>
-                    <ul className="items">{renderToPackSubtree(g.id, 1)}</ul>
-                  </div>
-                ))}
-            </>
-          )}
-        </section>
+        <ListSection
+          mode="to-pack"
+          orderedGroups={orderedGroups}
+          childrenByGroup={childrenByGroup}
+          idsWithChildren={idsWithChildren}
+          toPackCount={toPackCount}
+          luggageSvg={luggageSvg}
+          animating={animating}
+          indentClass={indentClass}
+          setGroupStatus={setGroupStatus}
+          markWithAnimation={markWithAnimation}
+          restore={restore}
+          restoreGroup={restoreGroup}
+        />
 
-        <section className="column">
-          <h2>Packed</h2>
-          {leavesByStatus.packed.length === 0 && <p className="empty">No items packed yet.</p>}
-          {orderedGroups.map((g) => {
-            const anyPacked = hasDescendantWithStatus(g.id, 'packed')
-            const showGroup = g.status === 'packed' || anyPacked
-            if (!showGroup) return null
-            const hasDefaults = hasDefaultDescendants(g.id)
-            return (
-              <div key={g.id} className="group">
-                <ul className="items">
-                  <li className={`item crossed ${indentClass(0)}`}>
-                    <span className="title">{g.name}</span>
-                    <div className="actions">
-                      {g.status === 'packed' && !hasDefaults && (
-                        <button className="btn small ghost" onClick={() => restoreGroup(g.id)}>
-                          Restore
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                </ul>
-                <ul className="items">{renderStatusSubtree(g.id, 1, 'packed')}</ul>
-              </div>
-            )
-          })}
-        </section>
+        <ListSection
+          mode="packed"
+          orderedGroups={orderedGroups}
+          childrenByGroup={childrenByGroup}
+          idsWithChildren={idsWithChildren}
+          packedLeavesCount={leavesByStatus.packed.length}
+          animating={animating}
+          indentClass={indentClass}
+          setGroupStatus={setGroupStatus}
+          markWithAnimation={markWithAnimation}
+          restore={restore}
+          restoreGroup={restoreGroup}
+        />
 
-        <section className="column">
-          <h2>Not needed</h2>
-          {leavesByStatus.notNeeded.length === 0 && (
-            <p className="empty">Everything might be useful!</p>
-          )}
-          {orderedGroups.map((g) => {
-            const any = hasDescendantWithStatus(g.id, 'not-needed')
-            const showGroup = g.status === 'not-needed' || any
-            if (!showGroup) return null
-            const hasDefaults = hasDefaultDescendants(g.id)
-            return (
-              <div key={g.id} className="group">
-                <ul className="items">
-                  <li className={`item crossed dim ${indentClass(0)}`}>
-                    <span className="title">{g.name}</span>
-                    <div className="actions">
-                      {g.status === 'not-needed' && !hasDefaults && (
-                        <button className="btn small ghost" onClick={() => restoreGroup(g.id)}>
-                          Restore
-                        </button>
-                      )}
-                    </div>
-                  </li>
-                </ul>
-                <ul className="items">{renderStatusSubtree(g.id, 1, 'not-needed')}</ul>
-              </div>
-            )
-          })}
-        </section>
+        <ListSection
+          mode="not-needed"
+          orderedGroups={orderedGroups}
+          childrenByGroup={childrenByGroup}
+          idsWithChildren={idsWithChildren}
+          notNeededLeavesCount={leavesByStatus.notNeeded.length}
+          animating={animating}
+          indentClass={indentClass}
+          setGroupStatus={setGroupStatus}
+          markWithAnimation={markWithAnimation}
+          restore={restore}
+          restoreGroup={restoreGroup}
+        />
       </main>
 
     </div>
