@@ -13,7 +13,6 @@ export type ListSectionProps = {
   idsWithChildren: Set<string>
   items: Item[]
   stateMap: Record<string, ItemState>
-  setStateMap: React.Dispatch<React.SetStateAction<Record<string, ItemState>>>
   // unified count of visible entries in this section
   count?: number
   // custom empty state component to render when the section is empty
@@ -21,6 +20,13 @@ export type ListSectionProps = {
   // interaction/animation helpers
   animating: { id: string; type: 'packed' | 'not-needed' } | null
   setAnimating: React.Dispatch<React.SetStateAction<{ id: string; type: 'packed' | 'not-needed' } | null>>
+  // encapsulated state API
+  packItem: (item: Item) => void
+  notNeededItem: (item: Item) => void
+  restoreItem: (item: Item) => void
+  packGroup: (group: Item) => void
+  notNeededGroup: (group: Item) => void
+  restoreGroup: (group: Item) => void
 }
 
 export default function ListSection(props: ListSectionProps) {
@@ -31,71 +37,30 @@ export default function ListSection(props: ListSectionProps) {
     idsWithChildren,
     items,
     stateMap,
-    setStateMap,
     count = 0,
     emptyComponent,
     animating,
     setAnimating,
+    packItem,
+    notNeededItem,
+    restoreItem,
+    packGroup,
+    notNeededGroup,
+    restoreGroup,
   } = props
 
   // Local helpers (identical across lists)
   const indentClass = (depth: number) => `indent-${Math.min(depth, 4)}`
 
-  const setStatus = (id: string, state: ItemState) => {
-    setStateMap((prev) => ({ ...prev, [id]: state }))
-  }
-
-  const setGroupStatus = (groupId: string, state: ItemState) => {
-    setStateMap((prev) => {
-      const map = new Map<string, string[]>()
-      for (const n of items) {
-        if (n.parentId) {
-          const arr = map.get(n.parentId) ?? []
-          arr.push(n.id)
-          map.set(n.parentId, arr)
-        }
-      }
-      const collect = (id: string, acc: Set<string>) => {
-        acc.add(id)
-        const kids = map.get(id) ?? []
-        for (const k of kids) collect(k, acc)
-      }
-      const all = new Set<string>()
-      collect(groupId, all)
-      const next: Record<string, ItemState> = { ...prev }
-      for (const id of all) next[id] = state
-      return next
-    })
-  }
-
-  const restoreGroup = (groupId: string) => {
-    setStateMap((prev) => ({ ...prev, [groupId]: null }))
-  }
-
-  const restore = (id: string) => {
-    setStateMap((prev) => {
-      const byId = new Map(items.map((n) => [n.id, n] as const))
-      const target = byId.get(id)
-      if (!target) return prev
-      const next: Record<string, ItemState> = { ...prev, [id]: null }
-      let p = target.parentId
-      while (p) {
-        const parent = byId.get(p)
-        if (!parent) break
-        if (next[p] !== null) {
-          next[p] = null
-        }
-        p = parent.parentId
-      }
-      return next
-    })
-  }
-
-  const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
+  const markWithAnimation = (item: Item, type: 'packed' | 'not-needed') => {
     if (animating) return
-    setAnimating({ id, type })
+    setAnimating({ id: item.id, type })
     window.setTimeout(() => {
-      setStatus(id, type)
+      if (type === 'packed') {
+        packItem(item)
+      } else {
+        notNeededItem(item)
+      }
       setAnimating(null)
     }, 350)
   }
@@ -137,12 +102,12 @@ export default function ListSection(props: ListSectionProps) {
             <div key={n.id} className="group">
               <div className={`item ${indentClass(depth)}`}>
                 <span className="title">{n.name}</span>
-                <div className="actions">
-                  <button className="btn small icon-btn" onClick={() => setGroupStatus(n.id, 'packed')} disabled={!!animating} aria-label="Mark group as packed">
+                  <div className="actions">
+                  <button className="btn small icon-btn" onClick={() => packGroup(n)} disabled={!!animating} aria-label="Mark group as packed">
                     <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Packed</span>
                   </button>
-                  <button className="btn small ghost warn icon-btn" onClick={() => setGroupStatus(n.id, 'not-needed')} disabled={!!animating} aria-label="Mark group as not needed">
+                  <button className="btn small ghost warn icon-btn" onClick={() => notNeededGroup(n)} disabled={!!animating} aria-label="Mark group as not needed">
                     <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Not needed</span>
                   </button>
@@ -158,11 +123,11 @@ export default function ListSection(props: ListSectionProps) {
           <li key={n.id} className={`item ${animClass} ${indentClass(depth)}`}>
             <span className="title">{n.name}</span>
             <div className="actions">
-              <button className="btn small icon-btn" onClick={() => markWithAnimation(n.id, 'packed')} disabled={isAnimating} aria-label="Mark item as packed">
+              <button className="btn small icon-btn" onClick={() => markWithAnimation(n, 'packed')} disabled={isAnimating} aria-label="Mark item as packed">
                 <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
                 <span className="btn-label">Packed</span>
               </button>
-              <button className="btn small ghost warn icon-btn" onClick={() => markWithAnimation(n.id, 'not-needed')} disabled={isAnimating} aria-label="Mark item as not needed">
+              <button className="btn small ghost warn icon-btn" onClick={() => markWithAnimation(n, 'not-needed')} disabled={isAnimating} aria-label="Mark item as not needed">
                 <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
                 <span className="btn-label">Not needed</span>
               </button>
@@ -187,7 +152,7 @@ export default function ListSection(props: ListSectionProps) {
               <span className="title">{n.name}</span>
               <div className="actions">
                 {stateMap[n.id] === status && !hasDefaults && (
-                  <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(n.id)} aria-label="Restore group to To pack">
+                  <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(n)} aria-label="Restore group to To pack">
                     <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Restore</span>
                   </button>
@@ -207,7 +172,7 @@ export default function ListSection(props: ListSectionProps) {
             <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
               <span className="title">{n.name}</span>
               <div className="actions">
-                <button className="btn small ghost restore icon-btn" onClick={() => restore(n.id)} aria-label="Restore item to To pack">
+                <button className="btn small ghost restore icon-btn" onClick={() => restoreItem(n)} aria-label="Restore item to To pack">
                   <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                   <span className="btn-label">Restore</span>
                 </button>
@@ -238,11 +203,11 @@ export default function ListSection(props: ListSectionProps) {
                   <div className={`item ${indentClass(0)}`}>
                     <span className="title">{g.name}</span>
                     <div className="actions">
-                      <button className="btn small icon-btn" onClick={() => setGroupStatus(g.id, 'packed')} disabled={!!animating} aria-label="Mark group as packed">
+                      <button className="btn small icon-btn" onClick={() => packGroup(g)} disabled={!!animating} aria-label="Mark group as packed">
                         <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
                         <span className="btn-label">Packed</span>
                       </button>
-                      <button className="btn small ghost warn icon-btn" onClick={() => setGroupStatus(g.id, 'not-needed')} disabled={!!animating} aria-label="Mark group as not needed">
+                      <button className="btn small ghost warn icon-btn" onClick={() => notNeededGroup(g)} disabled={!!animating} aria-label="Mark group as not needed">
                         <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
                         <span className="btn-label">Not needed</span>
                       </button>
@@ -282,7 +247,7 @@ export default function ListSection(props: ListSectionProps) {
                 <span className="title">{g.name}</span>
                 <div className="actions">
                   {stateMap[g.id] === status && !hasDefaults && (
-                    <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(g.id)} aria-label="Restore group to To pack">
+                    <button className="btn small ghost restore icon-btn" onClick={() => restoreGroup(g)} aria-label="Restore group to To pack">
                       <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                       <span className="btn-label">Restore</span>
                     </button>

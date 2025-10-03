@@ -185,6 +185,71 @@ function App() {
 
 
 
+  // Encapsulated state modification helpers
+  const setItemsHelper = (newItems: Item[]) => {
+    setItems(newItems)
+    const init: Record<string, ItemState> = {}
+    for (const it of newItems) init[it.id] = null
+    setStateMap(init)
+  }
+
+  const packItem = (item: Item) => {
+    setStateMap((prev) => ({ ...prev, [item.id]: 'packed' }))
+  }
+
+  const notNeededItem = (item: Item) => {
+    setStateMap((prev) => ({ ...prev, [item.id]: 'not-needed' }))
+  }
+
+  const restoreItem = (item: Item) => {
+    setStateMap((prev) => {
+      const byId = new Map(items.map((n) => [n.id, n] as const))
+      const target = byId.get(item.id)
+      if (!target) return prev
+      const next: Record<string, ItemState> = { ...prev, [item.id]: null }
+      let p = target.parentId
+      while (p) {
+        const parent = byId.get(p)
+        if (!parent) break
+        if (next[p] !== null) next[p] = null
+        p = parent.parentId
+      }
+      return next
+    })
+  }
+
+  const setGroupStatus = (group: Item, state: ItemState) => {
+    setStateMap((prev) => {
+      const map = new Map<string, string[]>()
+      for (const n of items) {
+        if (n.parentId) {
+          const arr = map.get(n.parentId) ?? []
+          arr.push(n.id)
+          map.set(n.parentId, arr)
+        }
+      }
+      const collect = (id: string, acc: Set<string>) => {
+        acc.add(id)
+        const kids = map.get(id) ?? []
+        for (const k of kids) collect(k, acc)
+      }
+      const all = new Set<string>()
+      collect(group.id, all)
+      const next: Record<string, ItemState> = { ...prev }
+      for (const id of all) next[id] = state
+      return next
+    })
+  }
+
+  const packGroup = (group: Item) => setGroupStatus(group, 'packed')
+  const notNeededGroup = (group: Item) => setGroupStatus(group, 'not-needed')
+  const restoreGroup = (group: Item) => {
+    setStateMap((prev) => ({ ...prev, [group.id]: null }))
+  }
+
+  // alias to satisfy request's naming typo
+  const notNeded = notNeededItem
+
   return (
      <div className="app">
        <header className="header">
@@ -192,17 +257,10 @@ function App() {
          <p className="subtitle">A simple trip packing checklist</p>
          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
            <ImportButton onImport={(newItems) => {
-             setItems(newItems)
-             // reset state map for new structure
-             const init: Record<string, ItemState> = {}
-             for (const it of newItems) init[it.id] = null
-             setStateMap(init)
+             setItemsHelper(newItems)
            }} />
            <ResetButton onReset={(newItems) => {
-             setItems(newItems)
-             const init: Record<string, ItemState> = {}
-             for (const it of newItems) init[it.id] = null
-             setStateMap(init)
+             setItemsHelper(newItems)
            }} />
          </div>
        </header>
@@ -215,7 +273,6 @@ function App() {
           idsWithChildren={idsWithChildren}
           items={items}
           stateMap={stateMap}
-          setStateMap={setStateMap}
           count={toPackCount}
           emptyComponent={(
             <div className="empty-hero" aria-live="polite">
@@ -226,6 +283,12 @@ function App() {
           )}
           animating={animating}
           setAnimating={setAnimating}
+          packItem={packItem}
+          notNeededItem={notNeededItem}
+          restoreItem={restoreItem}
+          packGroup={packGroup}
+          notNeededGroup={notNeededGroup}
+          restoreGroup={restoreGroup}
         />
 
         <ListSection
@@ -235,11 +298,16 @@ function App() {
           idsWithChildren={idsWithChildren}
           items={items}
           stateMap={stateMap}
-          setStateMap={setStateMap}
           count={packedCount}
           emptyComponent={<p className="empty">No items packed yet.</p>}
           animating={animating}
           setAnimating={setAnimating}
+          packItem={packItem}
+          notNeededItem={notNeededItem}
+          restoreItem={restoreItem}
+          packGroup={packGroup}
+          notNeededGroup={notNeededGroup}
+          restoreGroup={restoreGroup}
         />
 
         <ListSection
@@ -249,11 +317,16 @@ function App() {
           idsWithChildren={idsWithChildren}
           items={items}
           stateMap={stateMap}
-          setStateMap={setStateMap}
           count={notNeededCount}
           emptyComponent={<p className="empty">No items marked as not needed.</p>}
           animating={animating}
           setAnimating={setAnimating}
+          packItem={packItem}
+          notNeededItem={notNeededItem}
+          restoreItem={restoreItem}
+          packGroup={packGroup}
+          notNeededGroup={notNeededGroup}
+          restoreGroup={restoreGroup}
         />
       </main>
 
