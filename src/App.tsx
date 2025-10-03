@@ -9,6 +9,8 @@ type Item = {
   status: ItemStatus
 }
 
+const STORAGE_KEY = 'packman.items.v1'
+
 const initialNames = [
   'Passport/ID',
   'Boarding pass',
@@ -32,9 +34,23 @@ const initialNames = [
 ]
 
 function App() {
-  const [items, setItems] = useState<Item[]>(() =>
-    initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' }))
-  )
+  const [items, setItems] = useState<Item[]>(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (Array.isArray(parsed)) {
+          const okStatuses: ItemStatus[] = ['default', 'packed', 'not-needed']
+          const valid = parsed.every(
+            (it: any) =>
+              it && typeof it.id === 'string' && typeof it.name === 'string' && okStatuses.includes(it.status)
+          )
+          if (valid) return parsed as Item[]
+        }
+      }
+    } catch {}
+    return initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' }))
+  })
 
   const lists = useMemo(() => {
     return {
@@ -42,6 +58,12 @@ function App() {
       packed: items.filter((i) => i.status === 'packed'),
       notNeeded: items.filter((i) => i.status === 'not-needed'),
     }
+  }, [items])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items))
+    } catch {}
   }, [items])
 
   const setStatus = (id: string, status: ItemStatus) => {
