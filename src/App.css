@@ -79,6 +79,15 @@
 .item.indent-1 {
   margin-left: 1.25rem;
 }
+.item.indent-2 {
+  margin-left: 2.5rem;
+}
+.item.indent-3 {
+  margin-left: 3.75rem;
+}
+.item.indent-4 {
+  margin-left: 5rem;
+}
 
 .btn {
   border: 1px solid transparent;

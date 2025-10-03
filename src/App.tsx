@@ -16,51 +16,33 @@ const STORAGE_KEY = 'packman.nodes.v2'
 
 
 
-function parseUserList(text: string): { items: { name: string; status: ItemStatus; category?: string }[] } {
+// Parse text with arbitrary nesting (2 spaces per level). Each non-empty line becomes a node.
+function nodesFromText(text: string): Node[] {
   const lines = text.replace(/\r/g, '').split('\n')
-  const result: { name: string; status: ItemStatus; category?: string }[] = []
-  let currentGroup: string | null = null
+  const nodes: Node[] = []
+  // stack of node ids by depth
+  const stack: string[] = []
+  let seq = 0
   for (const raw of lines) {
     const line = raw.replace(/\s+$/g, '')
     if (line.trim().length === 0) continue
-    const match = line.match(/^(\s*)/)
-    const indent = match ? match[1].length : 0
-    if (indent === 0) {
-      // Group header
-      currentGroup = line.trim()
+    const m = line.match(/^(\s*)/)
+    const indent = m ? m[1].length : 0
+    if (indent % 2 !== 0) {
+      // ignore invalid indentation
       continue
     }
-    if (indent === 2) {
-      const name = line.slice(2).trim()
-      if (name.length === 0) continue
-      result.push({ name, status: 'default', category: currentGroup ?? 'Other' })
-      continue
-    }
-    // For any other indentation, ignore the line as invalid per spec
+    const depth = indent / 2
+    const name = line.trim()
+    // shrink stack to current depth
+    while (stack.length > depth) stack.pop()
+    const parentId = depth === 0 ? null : stack[stack.length - 1] ?? null
+    const id = `n:${++seq}`
+    nodes.push({ id, name, status: 'default', parentId })
+    // push this node as current parent for deeper levels
+    stack.push(id)
   }
-  return { items: result }
-}
-
-// Build Node[] from parsed items (used by import, default initialization, and reset)
-function buildNodesFromParsed(items: { name: string; status: ItemStatus; category?: string }[]): Node[] {
-  const cats = Array.from(new Set(items.map((it) => it.category ?? 'Other')))
-  const groupIdByCat = new Map<string, string>()
-  const nodes: Node[] = []
-  for (const c of cats) {
-    const gid = `g:${c}`
-    groupIdByCat.set(c, gid)
-    nodes.push({ id: gid, name: c, status: 'default', parentId: null })
-  }
-  items.forEach((it, i) => {
-    const cat = it.category ?? 'Other'
-    nodes.push({ id: `i:${i + 1}`, name: it.name, status: 'default', parentId: groupIdByCat.get(cat)! })
-  })
   return nodes
-}
-
-function nodesFromText(text: string): Node[] {
-  const { items } = parseUserList(text)
-  return buildNodesFromParsed(items)
 }
 
 // Compose default list text in the same format as import feature (Group + 2-space indented items)
@@ -150,17 +132,15 @@ function App() {
     if (!file) return
     try {
       const text = await file.text()
-      const { items: parsed } = parseUserList(text)
-      if (parsed.length === 0) {
-        window.alert('No items found in the uploaded file. Use format:\nGroup\n  Item\n  Item')
+      const parsedNodes = nodesFromText(text)
+      if (parsedNodes.length === 0) {
+        window.alert('No items found in the uploaded file. Use 2-space indentation to nest groups/items.')
         return
       }
       if (!window.confirm('Importing will replace your current list (and keep Reset to defaults). Continue?')) {
         return
       }
-      // Build unified nodes via import pipeline
-      const next = buildNodesFromParsed(parsed)
-      setNodes(next)
+      setNodes(parsedNodes)
     } catch (err) {
       console.error(err)
       window.alert('Failed to read the file. Please ensure it is a plain text (.txt) file.')
@@ -181,13 +161,16 @@ function App() {
     return m
   }, [nodes])
 
+  const idsWithChildren = useMemo(() => new Set(Array.from(childrenByGroup.keys())), [childrenByGroup])
+
   const leavesByStatus = useMemo(() => {
+    const isLeaf = (n: Node) => !idsWithChildren.has(n.id)
     return {
-      default: nodes.filter((n) => n.parentId && n.status === 'default'),
-      packed: nodes.filter((n) => n.parentId && n.status === 'packed'),
-      notNeeded: nodes.filter((n) => n.parentId && n.status === 'not-needed'),
+      default: nodes.filter((n) => isLeaf(n) && n.status === 'default'),
+      packed: nodes.filter((n) => isLeaf(n) && n.status === 'packed'),
+      notNeeded: nodes.filter((n) => isLeaf(n) && n.status === 'not-needed'),
     }
-  }, [nodes])
+  }, [nodes, idsWithChildren])
 
   // Use groups in their natural order as defined by the source list (default or imported)
   const orderedGroups = groups
@@ -204,7 +187,25 @@ function App() {
   }
 
   const setGroupStatus = (groupId: string, status: ItemStatus) => {
-    setNodes((prev) => prev.map((n) => (n.id === groupId || n.parentId === groupId ? { ...n, status } : n)))
+    setNodes((prev) => {
+      // build children map
+      const map = new Map<string, string[]>()
+      for (const n of prev) {
+        if (n.parentId) {
+          const arr = map.get(n.parentId) ?? []
+          arr.push(n.id)
+          map.set(n.parentId, arr)
+        }
+      }
+      const collect = (id: string, acc: Set<string>) => {
+        acc.add(id)
+        const kids = map.get(id) ?? []
+        for (const k of kids) collect(k, acc)
+      }
+      const all = new Set<string>()
+      collect(groupId, all)
+      return prev.map((n) => (all.has(n.id) ? { ...n, status } : n))
+    })
   }
 
   const restoreGroup = (groupId: string) => {
@@ -213,18 +214,20 @@ function App() {
 
   const restore = (id: string) => {
     setNodes((prev) => {
-      const target = prev.find((n) => n.id === id)
+      const byId = new Map(prev.map((n) => [n.id, n] as const))
+      const target = byId.get(id)
       if (!target) return prev
-      if (target.parentId === null) {
-        // Group restore only resets the group itself
-        return prev.map((n) => (n.id === id ? { ...n, status: 'default' } : n))
-      }
-      const parentId = target.parentId
-      const next = prev.map((n) => (n.id === id ? { ...n, status: 'default' as ItemStatus } : n))
-      const parent = prev.find((n) => n.id === parentId)
-      if (parent && parent.status !== 'default') {
-        // Ensure parent appears in To pack when restoring a child
-        return next.map((n) => (n.id === parentId ? { ...n, status: 'default' } : n))
+      // set the node to default
+      let next = prev.map((n) => (n.id === id ? { ...n, status: 'default' as ItemStatus } : n))
+      // ensure all ancestors are default so it appears in To pack with its parents
+      let p = target.parentId
+      while (p) {
+        const parent = byId.get(p)
+        if (!parent) break
+        if (parent.status !== 'default') {
+          next = next.map((n) => (n.id === p ? { ...n, status: 'default' } : n))
+        }
+        p = parent.parentId
       }
       return next
     })
@@ -252,8 +255,125 @@ function App() {
       } catch {}
     }
   }
- 
-   return (
+
+  // Helpers for recursive views
+  const indentClass = (depth: number) => `indent-${Math.min(depth, 4)}`
+  const getChildren = (id: string) => childrenByGroup.get(id) ?? []
+  const hasDescendantWithStatus = (id: string, status: ItemStatus): boolean => {
+    const stack = [id]
+    while (stack.length) {
+      const cur = stack.pop()!
+      const kids = childrenByGroup.get(cur) ?? []
+      for (const k of kids) {
+        if (k.status === status) return true
+        stack.push(k.id)
+      }
+    }
+    return false
+  }
+  const hasDefaultDescendants = (id: string): boolean => {
+    const stack = [id]
+    while (stack.length) {
+      const cur = stack.pop()!
+      const kids = childrenByGroup.get(cur) ?? []
+      for (const k of kids) {
+        if (k.status === 'default') return true
+        stack.push(k.id)
+      }
+    }
+    return false
+  }
+
+  const renderToPackSubtree = (parentId: string, depth: number) => {
+    const children = childrenByGroup.get(parentId) ?? []
+    return children
+      .filter((n) => n.status === 'default')
+      .map((n) => {
+        const childHasChildren = idsWithChildren.has(n.id)
+        if (childHasChildren) {
+          return (
+            <div key={n.id} className="group">
+              <div className={`item ${indentClass(depth)}`}>
+                <span className="title">{n.name}</span>
+                <div className="actions">
+                  <button className="btn small" onClick={() => setGroupStatus(n.id, 'packed')} disabled={!!animating}>
+                    Packed
+                  </button>
+                  <button className="btn small ghost" onClick={() => setGroupStatus(n.id, 'not-needed')} disabled={!!animating}>
+                    Not needed
+                  </button>
+                </div>
+              </div>
+              <ul className="items">{renderToPackSubtree(n.id, depth + 1)}</ul>
+            </div>
+          )
+        }
+        const isAnimating = animating?.id === n.id
+        const animClass = isAnimating ? (animating!.type === 'packed' ? 'anim-packed' : 'anim-notneeded') : ''
+        return (
+          <li key={n.id} className={`item ${animClass} ${indentClass(depth)}`}>
+            <span className="title">{n.name}</span>
+            <div className="actions">
+              <button className="btn small" onClick={() => markWithAnimation(n.id, 'packed')} disabled={isAnimating}>
+                Packed
+              </button>
+              <button className="btn small ghost" onClick={() => markWithAnimation(n.id, 'not-needed')} disabled={isAnimating}>
+                Not needed
+              </button>
+            </div>
+          </li>
+        )
+      })
+  }
+
+  const renderStatusSubtree = (parentId: string, depth: number, status: ItemStatus) => {
+    const children = childrenByGroup.get(parentId) ?? []
+    const parts: JSX.Element[] = []
+    for (const n of children) {
+      const isGroup = idsWithChildren.has(n.id)
+      if (isGroup) {
+        const any = hasDescendantWithStatus(n.id, status)
+        const showGroup = n.status === status || any
+        if (showGroup) {
+          const hasDefaults = hasDefaultDescendants(n.id)
+          parts.push(
+            <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
+              <span className="title">{n.name}</span>
+              <div className="actions">
+                {n.status === status && !hasDefaults && (
+                  <button className="btn small ghost" onClick={() => restoreGroup(n.id)}>
+                    Restore
+                  </button>
+                )}
+              </div>
+            </li>
+          )
+          // recurse beneath this group
+          parts.push(
+            <ul key={n.id + ':children'} className="items">
+              {renderStatusSubtree(n.id, depth + 1, status)}
+            </ul>
+          )
+        }
+      } else {
+        if (n.status === status) {
+          parts.push(
+            <li key={n.id} className={`item crossed ${status === 'not-needed' ? 'dim' : ''} ${indentClass(depth)}`}>
+              <span className="title">{n.name}</span>
+              <div className="actions">
+                <button className="btn small ghost" onClick={() => restore(n.id)}>
+                  Restore
+                </button>
+              </div>
+            </li>
+          )
+        }
+      }
+    }
+    return parts
+  }
+
+  return (
      <div className="app">
        <header className="header">
          <h1>Packman</h1>
@@ -285,63 +405,18 @@ function App() {
             .filter((g) => g.status === 'default')
             .map((g) => (
               <div key={g.id} className="group">
-                {/* Group row visually similar to an item, only indentation differs */}
-                <div className="item indent-0">
+                <div className={`item ${indentClass(0)}`}>
                   <span className="title">{g.name}</span>
                   <div className="actions">
-                    <button
-                      className="btn small"
-                      onClick={() => setGroupStatus(g.id, 'packed')}
-                      aria-label={`Mark all items in ${g.name} as packed`}
-                      disabled={!!animating}
-                    >
+                    <button className="btn small" onClick={() => setGroupStatus(g.id, 'packed')} disabled={!!animating}>
                       Packed
                     </button>
-                    <button
-                      className="btn small ghost"
-                      onClick={() => setGroupStatus(g.id, 'not-needed')}
-                      aria-label={`Mark all items in ${g.name} as not needed`}
-                      disabled={!!animating}
-                    >
+                    <button className="btn small ghost" onClick={() => setGroupStatus(g.id, 'not-needed')} disabled={!!animating}>
                       Not needed
                     </button>
                   </div>
                 </div>
-                <ul className="items">
-                  {(childrenByGroup.get(g.id) ?? [])
-                    .filter((item) => item.status === 'default')
-                    .map((item) => {
-                      const isAnimating = animating?.id === item.id
-                      const animClass = isAnimating
-                        ? animating!.type === 'packed'
-                          ? 'anim-packed'
-                          : 'anim-notneeded'
-                        : ''
-                      return (
-                        <li key={item.id} className={`item ${animClass} indent-1`}>
-                          <span className="title">{item.name}</span>
-                          <div className="actions">
-                            <button
-                              className="btn small"
-                              onClick={() => markWithAnimation(item.id, 'packed')}
-                              aria-label={`Mark ${item.name} as packed`}
-                              disabled={isAnimating}
-                            >
-                              Packed
-                            </button>
-                            <button
-                              className="btn small ghost"
-                              onClick={() => markWithAnimation(item.id, 'not-needed')}
-                              aria-label={`Mark ${item.name} as not needed`}
-                              disabled={isAnimating}
-                            >
-                              Not needed
-                            </button>
-                          </div>
-                        </li>
-                      )
-                    })}
-                </ul>
+                <ul className="items">{renderToPackSubtree(g.id, 1)}</ul>
               </div>
             ))}
         </section>
@@ -350,47 +425,25 @@ function App() {
           <h2>Packed</h2>
           {leavesByStatus.packed.length === 0 && <p className="empty">No items packed yet.</p>}
           {orderedGroups.map((g) => {
-            const children = childrenByGroup.get(g.id) ?? []
-            const anyPacked = children.some((c) => c.status === 'packed')
+            const anyPacked = hasDescendantWithStatus(g.id, 'packed')
             const showGroup = g.status === 'packed' || anyPacked
             if (!showGroup) return null
-            const hasDefaultChildren = children.some((c) => c.status === 'default')
+            const hasDefaults = hasDefaultDescendants(g.id)
             return (
               <div key={g.id} className="group">
                 <ul className="items">
-                  <li className="item crossed indent-0">
+                  <li className={`item crossed ${indentClass(0)}`}>
                     <span className="title">{g.name}</span>
                     <div className="actions">
-                      {g.status === 'packed' && !hasDefaultChildren && (
-                        <button
-                          className="btn small ghost"
-                          onClick={() => restoreGroup(g.id)}
-                          aria-label={`Move ${g.name} back to default`}
-                        >
+                      {g.status === 'packed' && !hasDefaults && (
+                        <button className="btn small ghost" onClick={() => restoreGroup(g.id)}>
                           Restore
                         </button>
                       )}
                     </div>
                   </li>
                 </ul>
-                <ul className="items">
-                  {children
-                    .filter((item) => item.status === 'packed')
-                    .map((item) => (
-                      <li key={item.id} className="item crossed indent-1">
-                        <span className="title">{item.name}</span>
-                        <div className="actions">
-                          <button
-                            className="btn small ghost"
-                            onClick={() => restore(item.id)}
-                            aria-label={`Move ${item.name} back to default`}
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                </ul>
+                <ul className="items">{renderStatusSubtree(g.id, 1, 'packed')}</ul>
               </div>
             )
           })}
@@ -402,47 +455,25 @@ function App() {
             <p className="empty">Everything might be useful!</p>
           )}
           {orderedGroups.map((g) => {
-            const children = childrenByGroup.get(g.id) ?? []
-            const anyNN = children.some((c) => c.status === 'not-needed')
-            const showGroup = g.status === 'not-needed' || anyNN
+            const any = hasDescendantWithStatus(g.id, 'not-needed')
+            const showGroup = g.status === 'not-needed' || any
             if (!showGroup) return null
-            const hasDefaultChildren = children.some((c) => c.status === 'default')
+            const hasDefaults = hasDefaultDescendants(g.id)
             return (
               <div key={g.id} className="group">
                 <ul className="items">
-                  <li className="item crossed dim indent-0">
+                  <li className={`item crossed dim ${indentClass(0)}`}>
                     <span className="title">{g.name}</span>
                     <div className="actions">
-                      {g.status === 'not-needed' && !hasDefaultChildren && (
-                        <button
-                          className="btn small ghost"
-                          onClick={() => restoreGroup(g.id)}
-                          aria-label={`Move ${g.name} back to default`}
-                        >
+                      {g.status === 'not-needed' && !hasDefaults && (
+                        <button className="btn small ghost" onClick={() => restoreGroup(g.id)}>
                           Restore
                         </button>
                       )}
                     </div>
                   </li>
                 </ul>
-                <ul className="items">
-                  {children
-                    .filter((item) => item.status === 'not-needed')
-                    .map((item) => (
-                      <li key={item.id} className="item crossed dim indent-1">
-                        <span className="title">{item.name}</span>
-                        <div className="actions">
-                          <button
-                            className="btn small ghost"
-                            onClick={() => restore(item.id)}
-                            aria-label={`Move ${item.name} back to default`}
-                          >
-                            Restore
-                          </button>
-                        </div>
-                      </li>
-                    ))}
-                </ul>
+                <ul className="items">{renderStatusSubtree(g.id, 1, 'not-needed')}</ul>
               </div>
             )
           })}
