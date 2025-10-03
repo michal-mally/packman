@@ -167,31 +167,12 @@ export function usePackman() {
   }
 
   const packItem = (item: Item) => {
-    setStateMap((prev) => ({ ...prev, [item.id]: 'packed' }))
-  }
-
-  const notNeededItem = (item: Item) => {
-    setStateMap((prev) => ({ ...prev, [item.id]: 'not-needed' }))
-  }
-
-  const restoreItem = (item: Item) => {
-    setStateMap((prev) => {
-      const byId = new Map(items.map((n) => [n.id, n] as const))
-      const target = byId.get(item.id)
-      if (!target) return prev
-      const next: Record<string, ItemState> = { ...prev, [item.id]: null }
-      let p = target.parentId
-      while (p) {
-        const parent = byId.get(p)
-        if (!parent) break
-        if (next[p] !== null) next[p] = null
-        p = parent.parentId
-      }
-      return next
-    })
-  }
-
-  const setGroupStatus = (group: Item, state: ItemState) => {
+    // If item is a group, cascade to all descendants and the group itself
+    const hasChildren = items.some((n) => n.parentId === item.id)
+    if (!hasChildren) {
+      setStateMap((prev) => ({ ...prev, [item.id]: 'packed' }))
+      return
+    }
     setStateMap((prev) => {
       const map = new Map<string, string[]>()
       for (const n of items) {
@@ -207,17 +188,60 @@ export function usePackman() {
         for (const k of kids) collect(k, acc)
       }
       const all = new Set<string>()
-      collect(group.id, all)
+      collect(item.id, all)
       const next: Record<string, ItemState> = { ...prev }
-      for (const id of all) next[id] = state
+      for (const id of all) next[id] = 'packed'
       return next
     })
   }
 
-  const packGroup = (group: Item) => setGroupStatus(group, 'packed')
-  const notNeededGroup = (group: Item) => setGroupStatus(group, 'not-needed')
-  const restoreGroup = (group: Item) => {
-    setStateMap((prev) => ({ ...prev, [group.id]: null }))
+  const notNeededItem = (item: Item) => {
+    const hasChildren = items.some((n) => n.parentId === item.id)
+    if (!hasChildren) {
+      setStateMap((prev) => ({ ...prev, [item.id]: 'not-needed' }))
+      return
+    }
+    setStateMap((prev) => {
+      const map = new Map<string, string[]>()
+      for (const n of items) {
+        if (n.parentId) {
+          const arr = map.get(n.parentId) ?? []
+          arr.push(n.id)
+          map.set(n.parentId, arr)
+        }
+      }
+      const collect = (id: string, acc: Set<string>) => {
+        acc.add(id)
+        const kids = map.get(id) ?? []
+        for (const k of kids) collect(k, acc)
+      }
+      const all = new Set<string>()
+      collect(item.id, all)
+      const next: Record<string, ItemState> = { ...prev }
+      for (const id of all) next[id] = 'not-needed'
+      return next
+    })
+  }
+
+  const restoreItem = (item: Item) => {
+    setStateMap((prev) => {
+      const byId = new Map(items.map((n) => [n.id, n] as const))
+      const target = byId.get(item.id)
+      if (!target) return prev
+      const hasChildren = items.some((n) => n.parentId === item.id)
+      const next: Record<string, ItemState> = { ...prev, [item.id]: null }
+      if (!hasChildren) {
+        // For leaves: also restore all ancestors so the item reappears in To pack
+        let p = target.parentId
+        while (p) {
+          const parent = byId.get(p)
+          if (!parent) break
+          if (next[p] !== null) next[p] = null
+          p = parent.parentId
+        }
+      }
+      return next
+    })
   }
 
   // Single actions API
@@ -225,9 +249,6 @@ export function usePackman() {
     packItem,
     notNeededItem,
     restoreItem,
-    packGroup,
-    notNeededGroup,
-    restoreGroup,
   }
 
   return {

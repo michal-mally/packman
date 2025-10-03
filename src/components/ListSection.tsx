@@ -93,11 +93,11 @@ export default function ListSection(props: ListSectionProps) {
               <div className={`item ${indentClass(depth)}`}>
                 <span className="title">{n.name}</span>
                   <div className="actions">
-                  <button className="btn small icon-btn" onClick={() => actions.packGroup(n)} disabled={!!animating} aria-label="Mark group as packed">
+                  <button className="btn small icon-btn" onClick={() => actions.packItem(n)} disabled={!!animating} aria-label="Mark group as packed">
                     <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Packed</span>
                   </button>
-                  <button className="btn small ghost warn icon-btn" onClick={() => actions.notNeededGroup(n)} disabled={!!animating} aria-label="Mark group as not needed">
+                  <button className="btn small ghost warn icon-btn" onClick={() => actions.notNeededItem(n)} disabled={!!animating} aria-label="Mark group as not needed">
                     <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Not needed</span>
                   </button>
@@ -142,7 +142,7 @@ export default function ListSection(props: ListSectionProps) {
               <span className="title">{n.name}</span>
               <div className="actions">
                 {stateMap[n.id] === status && !hasDefaults && (
-                  <button className="btn small ghost restore icon-btn" onClick={() => actions.restoreGroup(n)} aria-label="Restore group to To pack">
+                  <button className="btn small ghost restore icon-btn" onClick={() => actions.restoreItem(n)} aria-label="Restore group to To pack">
                     <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                     <span className="btn-label">Restore</span>
                   </button>
@@ -193,11 +193,11 @@ export default function ListSection(props: ListSectionProps) {
                   <div className={`item ${indentClass(0)}`}>
                     <span className="title">{g.name}</span>
                     <div className="actions">
-                      <button className="btn small icon-btn" onClick={() => actions.packGroup(g)} disabled={!!animating} aria-label="Mark group as packed">
+                      <button className="btn small icon-btn" onClick={() => actions.packItem(g)} disabled={!!animating} aria-label="Mark group as packed">
                         <img src={checkIcon} className="icon" alt="" aria-hidden="true" />
                         <span className="btn-label">Packed</span>
                       </button>
-                      <button className="btn small ghost warn icon-btn" onClick={() => actions.notNeededGroup(g)} disabled={!!animating} aria-label="Mark group as not needed">
+                      <button className="btn small ghost warn icon-btn" onClick={() => actions.notNeededItem(g)} disabled={!!animating} aria-label="Mark group as not needed">
                         <img src={minusIcon} className="icon" alt="" aria-hidden="true" />
                         <span className="btn-label">Not needed</span>
                       </button>
@@ -237,7 +237,7 @@ export default function ListSection(props: ListSectionProps) {
                 <span className="title">{g.name}</span>
                 <div className="actions">
                   {stateMap[g.id] === status && !hasDefaults && (
-                    <button className="btn small ghost restore icon-btn" onClick={() => actions.restoreGroup(g)} aria-label="Restore group to To pack">
+                    <button className="btn small ghost restore icon-btn" onClick={() => actions.restoreItem(g)} aria-label="Restore group to To pack">
                       <img src={restoreIcon} className="icon" alt="" aria-hidden="true" />
                       <span className="btn-label">Restore</span>
                     </button>
