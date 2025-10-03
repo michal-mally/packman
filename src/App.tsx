@@ -80,6 +80,8 @@ function App() {
     return initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default', category: categorize(name) }))
   })
 
+  const [animating, setAnimating] = useState<{ id: string; type: 'packed' | 'not-needed' } | null>(null)
+
   const lists = useMemo(() => {
     return {
       default: items.filter((i) => i.status === 'default'),
@@ -118,6 +120,17 @@ function App() {
 
   const restore = (id: string) => setStatus(id, 'default')
 
+  const markWithAnimation = (id: string, type: 'packed' | 'not-needed') => {
+    // Prevent overlapping animations; keep UX simple
+    if (animating) return
+    setAnimating({ id, type })
+    // Duration should match CSS animation time
+    window.setTimeout(() => {
+      setStatus(id, type)
+      setAnimating(null)
+    }, 350)
+  }
+
   const resetAll = () => {
     const initial = initialNames.map((name, i) => ({ id: String(i + 1), name, status: 'default' as ItemStatus, category: categorize(name) }))
     // Optional confirmation to prevent accidental reset
@@ -151,27 +164,37 @@ function App() {
             <div key={cat} className="group">
               <h3 className="group-title">{cat}</h3>
               <ul className="items">
-                {groupedDefault.get(cat)!.map((item) => (
-                  <li key={item.id} className="item">
-                    <span className="title">{item.name}</span>
-                    <div className="actions">
-                      <button
-                        className="btn small"
-                        onClick={() => setStatus(item.id, 'packed')}
-                        aria-label={`Mark ${item.name} as packed`}
-                      >
-                        Packed
-                      </button>
-                      <button
-                        className="btn small ghost"
-                        onClick={() => setStatus(item.id, 'not-needed')}
-                        aria-label={`Mark ${item.name} as not needed`}
-                      >
-                        Not needed
-                      </button>
-                    </div>
-                  </li>
-                ))}
+                {groupedDefault.get(cat)!.map((item) => {
+                  const isAnimating = animating?.id === item.id
+                  const animClass = isAnimating
+                    ? animating!.type === 'packed'
+                      ? 'anim-packed'
+                      : 'anim-notneeded'
+                    : ''
+                  return (
+                    <li key={item.id} className={`item ${animClass}`}>
+                      <span className="title">{item.name}</span>
+                      <div className="actions">
+                        <button
+                          className="btn small"
+                          onClick={() => markWithAnimation(item.id, 'packed')}
+                          aria-label={`Mark ${item.name} as packed`}
+                          disabled={isAnimating}
+                        >
+                          Packed
+                        </button>
+                        <button
+                          className="btn small ghost"
+                          onClick={() => markWithAnimation(item.id, 'not-needed')}
+                          aria-label={`Mark ${item.name} as not needed`}
+                          disabled={isAnimating}
+                        >
+                          Not needed
+                        </button>
+                      </div>
+                    </li>
+                  )
+                })}
               </ul>
             </div>
           ))}
